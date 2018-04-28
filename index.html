@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>MDN Games: Shaders demo</title>
+  <style>
+  </style>
+<style>
+
+  .wrapper {
+    display: grid;
+    grid-gap: 10px;
+    grid-template-columns: auto 20em;
+  }
+
+  .controls {
+    order: 2;
+  }
+
+  .screen {
+    order: 1;
+  }
+
+</style>
+</head>
+<body>
+  <script src="screenEmu.js"></script>
+  <script id="vertexShader" type="x-shader/x-vertex">
+// an attribute will receive data from a buffer
+attribute vec4 a_position;
+
+// all shaders have a main function
+void main() {
+
+  // gl_Position is a special variable a vertex shader
+  // is responsible for setting
+  gl_Position = a_position;
+}
+  </script>
+  <script id="fragmentShader" type="x-shader/x-fragment">
+// fragment shaders don't have a default precision so we need
+// to pick one. mediump is a good default. It means "medium precision"
+precision mediump float;
+
+void main() {
+  // gl_FragColor is a special variable a fragment shader
+  // is responsible for setting
+  gl_FragColor = vec4(1, 0, 0.5, 1); // return redish-purple
+}
+  </script>
+
+  <div class="wrapper">
+  <div class="controls">
+    <table>
+      <tr>
+	<td>Decoder</td>
+	<td>
+	  <select id="decoder">
+	    <option value="COMPOSITE_YUV">Composite Y'UV</option>
+	    <option value="COMPOSITE_YIQ">Composite Y'IQ</option>
+	    <option value="COMPOSITE_CXA2025AS">Composite CXA2025AS</option>
+	  </select>
+	</td>
+      </tr>
+      <tr>
+	<td>Brightness</td>
+	<td><input type="range" min="-1" max="1" step="0.01" value="0" class="slider" id="videoBrightness"></td>
+      </tr>
+      <tr>
+	<td>Contrast</td>
+	<td><input type="range" min="0" max="2" step="0.01" value="1" class="slider" id="videoContrast"></td>
+      </tr>
+      <tr>
+	<td>Saturation</td>
+	<td><input type="range" min="0" max="2" step="0.01" value="1" class="slider" id="videoSaturation"></td>
+      </tr>
+      <tr>
+	<td>Hue</td>
+	<td><input type="range" min="-0.5" max="0.5" step="0.01" value="0" class="slider" id="videoHue"></td>
+      </tr>
+      <tr>
+	<td>White Only</td>
+	<td><input type="checkbox" id="white-only"></td>
+      </tr>
+      <tr>
+	<td>Horizontal Center</td>
+	<td><input type="range" min="-0.1" max="0.1" step="0.01" value="0" class="slider" id="videoHorizontalCenter"></td>
+      </tr>
+      <tr>
+	<td>Horizontal Size</td>
+	<td><input type="range" min="0.85" max="1.25" step="0.01" value="1.05" class="slider" id="videoHorizontalSize"></td>
+      </tr>
+      <tr>
+	<td>Vertical Center</td>
+	<td><input type="range" min="-0.1" max="0.1" step="0.01" value="0" class="slider" id="videoVerticalCenter"></td>
+      </tr>
+      <tr>
+	<td>Vertical Size</td>
+	<td><input type="range" min="0.85" max="1.25" step="0.01" value="1.05" class="slider" id="videoVerticalSize"></td>
+      </tr>
+      <tr>
+	<td>Luma Bandwidth</td>
+	<td><input type="range" min="0" max="7159090" step="1" value="2000000" class="slider" id="videoLumaBandwidth"></td>
+      </tr>
+      <tr>
+	<td>Chroma Bandwidth</td>
+	<td><input type="range" min="0" max="7159090" step="1" value="600000" class="slider" id="videoChromaBandwidth"></td>
+      </tr>
+      <tr>
+	<td>B/W Bandwidth</td>
+	<td><input type="range" min="0" max="7159090" step="1" value="6000000" class="slider" id="videoBandwidth"></td>
+      </tr>
+      <tr>
+	<td>Barrel</td>
+	<td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider" id="displayBarrel"></td>
+      </tr>
+      <tr>
+	<td>Scanline Level</td>
+	<td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider" id="displayScanlineLevel"></td>
+      </tr>
+      <tr>
+	<td>Shadow Mask Level</td>
+	<td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider" id="displayShadowMaskLevel"></td>
+      </tr>
+      <tr>
+	<td>Shadow Mask Dot Pitch</td>
+	<td><input type="range" min="0" max="2" step="0.01" value="0.5" class="slider" id="displayShadowMaskDotPitch"></td>
+      </tr>
+      <tr>
+	<td>Shadow Mask</td>
+	<td>
+	  <select id="shadow-mask">
+	    <option value="triad">Triad</option>
+	    <option value="inline">Inline</option>
+	    <option value="aperture">Aperture</option>
+	    <option value="lcd">LCD</option>
+	    <option value="bayer">Bayer</option>
+	  </select>
+	</td>
+      </tr>
+      <tr>
+	<td>Persistence</td>
+	<td><input type="range" min="0" max="1" step="0.01" value="0" class="slider" id="displayPersistence"></td>
+      </tr>
+      <tr>
+	<td>Center Lighting</td>
+	<td><input type="range" min="0" max="1" step="0.01" value="1" class="slider" id="displayCenterLighting"></td>
+      </tr>
+      <tr>
+	<td>Luminance Gain</td>
+	<td><input type="range" min="1" max="2" step="0.01" value="1" class="slider" id="displayLuminanceGain"></td>
+      </tr>
+    </table>
+  </div>
+  <div class="screen">
+    <canvas id="c"></canvas>
+    <canvas id="d"></canvas>
+  </div>
+  </div><!-- class="wrapper" -->
+  <script>
+    "use strict";
+
+    // Code from:
+    // https://webglfundamentals.org/webgl/lessons/webgl-fundamentals.html
+
+    function createShader(gl, type, source) {
+      let shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      let success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+      if (success) {
+        return shader;
+      }
+      console.log(gl.getShaderInfoLog(shader));
+      gl.deleteShader(shader);
+    }
+
+    function createProgram(gl, vertexShader, fragmentShader) {
+      let program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      let success = gl.getProgramParameter(program, gl.LINK_STATUS);
+      if (success) {
+        return program;
+      }
+      console.log(gl.getProgramInfoLog(program));
+      gl.deleteProgram(program);
+    }
+
+    function resizeCanvas(canvas) {
+      // Lookup the size the browser is displaying the canvas.
+      let displayWidth = canvas.clientWidth;
+      let displayHeight = canvas.clientHeight;
+
+      // Check if the canvas is not the same size.
+      if (canvas.width != displayWidth ||
+          canvas.height != displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+      }
+    }
+
+    // Initialization
+
+    let canvas = document.getElementById("c");
+    let gl = canvas.getContext("webgl");
+
+    let vertexShaderSource = document.getElementById("vertexShader").text;
+    let fragmentShaderSource = document.getElementById("fragmentShader").text;
+    let vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    let fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+    let program = createProgram(gl, vertexShader, fragmentShader);
+
+    let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+    let positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+    let positions = [
+      0, 0,
+      0, 0.5,
+      0.7, 0,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    // Rendering
+
+    resizeCanvas(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+    // Clear the canvas.
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Use our pair of shaders.
+    gl.useProgram(program);
+
+    // Turn the attribute on.
+    gl.enableVertexAttribArray(positionAttributeLocation);
+    // Tell it how to pull the data out.
+
+    // Bind the position buffer.
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+    // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
+    let size = 2;          // 2 components per iteration
+    let type = gl.FLOAT;   // the data is 32bit floats
+    let normalize = false; // don't normalize the data
+    let stride = 0;        // 0 = move forward size * sizeof(type) each iteration
+    let offset = 0;        // start at the beginning of the buffer
+
+    // (Binds current ARRAY_BUFFER attribute.)
+    gl.vertexAttribPointer(positionAttributeLocation, size, type, normalize, stride, offset);
+
+    // Execute our program!
+    let primitiveType = gl.TRIANGLES;
+    offset = 0;
+    let count = 3;
+    gl.drawArrays(primitiveType, offset, count);
+
+    // screenEmu.loadImage("images/airheart-560x192.png").then(image => {
+    //   let c = screenEmu.screenData(image, screenEmu.C.NTSC_DETAILS);
+    //   document.body.appendChild(c);
+    // });
+
+    async function tryScreenView() {
+      let canvas = document.getElementById("d");
+      let gl = canvas.getContext("webgl");
+      let sv = screenEmu.getScreenView(gl);
+      await sv.initOpenGL();
+      sv.freeOpenGL();
+    }
+
+    tryScreenView().then(() => console.log('tryScreenView: success'))
+    .catch(() => console.log('tryScreenView: error'));
+
+  </script>
+</body>
+</html>
