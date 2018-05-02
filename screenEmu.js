@@ -59,21 +59,39 @@ let screenEmu = (function () {
 			[HORIZ_DISPLAY, VERT_DISPLAY]];
   let palVertTotal = PAL_VTOTAL;
 
+  const VERTEX_SHADER =`
+// an attribute will receive data from a buffer
+attribute vec4 a_position;
+attribute vec2 a_texCoord;
+varying vec2 v_texCoord;
+
+// all shaders have a main function
+void main() {
+  // gl_Position is a special variable a vertex shader
+  // is responsible for setting
+  gl_Position = a_position;
+  v_texCoord = a_texCoord;
+}
+`;
+
   const COMPOSITE_SHADER = `
+precision mediump float;
+
 uniform sampler2D texture;
 uniform vec2 textureSize;
 uniform float subcarrier;
-uniform sampler1D phaseInfo;
+uniform sampler2D phaseInfo;
 uniform vec3 c0, c1, c2, c3, c4, c5, c6, c7, c8;
 uniform mat3 decoderMatrix;
 uniform vec3 decoderOffset;
+varying vec2 v_texCoord;
 
 float PI = 3.14159265358979323846264;
 
 vec3 pixel(in vec2 q)
 {
   vec3 c = texture2D(texture, q).rgb;
-  vec2 p = texture1D(phaseInfo, q.y).rg;
+  vec2 p = texture2D(phaseInfo, vec2(0, q.y)).rg;
   float phase = 2.0 * PI * (subcarrier * textureSize.x * q.x + p.x);
   return c * vec3(1.0, sin(phase), (1.0 - 2.0 * p.y) * cos(phase));
 }
@@ -85,7 +103,7 @@ vec3 pixels(vec2 q, float i)
 
 void main(void)
 {
-  vec2 q = gl_TexCoord[0].st;
+  vec2 q = v_texCoord;
   vec3 c = pixel(q) * c0;
   c += pixels(q, 1.0 / textureSize.x) * c1;
   c += pixels(q, 2.0 / textureSize.x) * c2;
@@ -100,6 +118,8 @@ void main(void)
 `;
 
   const DISPLAY_SHADER = `
+precision mediump float;
+
 uniform sampler2D texture;
 uniform vec2 textureSize;
 uniform float barrel;
@@ -114,21 +134,22 @@ uniform vec2 persistenceSize;
 uniform vec2 persistenceOrigin;
 uniform float persistenceLevel;
 uniform float luminanceGain;
+varying vec2 v_texCoord;
 
 float PI = 3.14159265358979323846264;
 
 void main(void)
 {
-  vec2 qc = (gl_TexCoord[1].st - vec2(0.5, 0.5)) * barrelSize;
+  vec2 qc = (v_texCoord - vec2(0.5, 0.5)) * barrelSize;
   vec2 qb = barrel * qc * dot(qc, qc);
-  vec2 q = gl_TexCoord[0].st + qb;
+  vec2 q = v_texCoord + qb;
 
   vec3 c = texture2D(texture, q).rgb;
 
   float scanline = sin(PI * textureSize.y * q.y);
   c *= mix(1.0, scanline * scanline, scanlineLevel);
 
-  vec3 mask = texture2D(shadowMask, (gl_TexCoord[1].st + qb) * shadowMaskSize).rgb;
+  vec3 mask = texture2D(shadowMask, (v_texCoord + qb) * shadowMaskSize).rgb;
   c *= mix(vec3(1.0, 1.0, 1.0), mask, shadowMaskLevel);
 
   vec2 lighting = qc * centerLighting;
@@ -136,7 +157,7 @@ void main(void)
 
   c *= luminanceGain;
 
-  vec2 qp = gl_TexCoord[1].st * persistenceSize + persistenceOrigin;
+  vec2 qp = v_texCoord * persistenceSize + persistenceOrigin;
   c = max(c, texture2D(persistence, qp).rgb * persistenceLevel - 0.5 / 256.0);
 
   gl_FragColor = vec4(c, 1.0);
@@ -227,6 +248,52 @@ void main(void)
     "DISPLAY",
   ];
 
+  const resizeCanvas = (canvas) => {
+    // Lookup the size the browser is displaying the canvas.
+    let displayWidth = canvas.clientWidth;
+    let displayHeight = canvas.clientHeight;
+
+    // Check if the canvas is not the same size.
+    if (canvas.width != displayWidth ||
+        canvas.height != displayHeight) {
+      canvas.width = displayWidth;
+      canvas.height = displayHeight;
+    }
+  };
+
+  // Code from:
+  // https://webglfundamentals.org/webgl/lessons/webgl-fundamentals.html
+  const createShader = (gl, name, type, source) => {
+    let shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    let success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+    if (success) {
+      return shader;
+    }
+
+    let log = gl.getShaderInfoLog(shader);
+    gl.deleteShader(shader);
+    throw `unable to compile shader ${name}: \n${log}`;
+  };
+
+  // Code from:
+  // https://webglfundamentals.org/webgl/lessons/webgl-fundamentals.html
+  const createProgram = (gl, name, ...shaders) => {
+    let program = gl.createProgram();
+    for (let shader of shaders) {
+      gl.attachShader(program, shader);
+    }
+    gl.linkProgram(program);
+    let success = gl.getProgramParameter(program, gl.LINK_STATUS);
+    if (success) {
+      return program;
+    }
+    let log = gl.getProgramInfoLog(program);
+    gl.deleteProgram(program);
+    throw `unable to compile program ${name}: \n${log}`;
+  };
+
   const TextureInfo = class {
     constructor(width, height, glTexture) {
       this.width = width;
@@ -235,11 +302,40 @@ void main(void)
     }
   };
 
+  const ImageInfo = class {
+    constructor(sampleRate, blackLevel, whiteLevel, subCarrier, colorBurst,
+		phaseAlternation, data) {
+      this.sampleRate = sampleRate;
+      this.blackLevel = blackLevel;
+      this.whiteLevel = whiteLevel;
+      this.subCarrier = subCarrier;
+      this.colorBurst = colorBurst;
+      this.phaseAlternation = phaseAlternation;
+      this.data = data;
+    }
+
+    get width() {
+      // TODO(zellyn): implement
+      return 100;
+    }
+
+    get height() {
+      // TODO(zellyn): implement
+      return 100;
+    }
+  };
+
   const ScreenView = class {
     constructor(gl) {
       this.gl = gl;
       this.textures = {};
       this.shaders = {};
+      this.image = null;
+    }
+
+    set image(imageInfo) {
+      this.imageInfo = imageInfo;
+      this.imageChanged = true;
     }
 
     async initOpenGL() {
@@ -284,100 +380,143 @@ void main(void)
 
     async loadTexture(path, isMipMap, name) {
       let gl = this.gl;
-      let textureInfo = this.textures[name];
+      let texInfo = this.textures[name];
       let image = await loadImage(path);
-      gl.bindTexture(gl.TEXTURE_2D, textureInfo.glTexture);
-
-      // TODO(zellyn): implement
+      gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA,
+		    gl.RGBA, gl.UNSIGNED_BYTE, image);
       if (isMipMap) {
-        // gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGB8,
-        //                   image.getSize().width, image.getSize().height,
-        //                   getGLFormat(image.getFormat()),
-        //                   GL_UNSIGNED_BYTE, image.getPixels());
-      } else {
-        // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-        //              image.getSize().width, image.getSize().height,
-        //              0,
-        //              getGLFormat(image.getFormat()), GL_UNSIGNED_BYTE, image.getPixels());
+	gl.generateMipmap(gl.TEXTURE_2D);
       }
 
-      textureInfo.width = image.naturalWidth;
-      textureInfo.height = image.naturalHeight;
+      texInfo.width = image.naturalWidth;
+      texInfo.height = image.naturalHeight;
     }
 
-    // TODO(zellyn): implement
     loadShaders() {
       this.loadShader("COMPOSITE", COMPOSITE_SHADER);
       this.loadShader("DISPLAY", DISPLAY_SHADER);
     }
 
-    // TODO(zellyn): implement
     loadShader(name, source) {
       console.log(`ScreenView.loadShader(${name}): not implemented yet`);
+
+      let glVertexShader = createShader(this.gl, name, this.gl.VERTEX_SHADER, VERTEX_SHADER);
+      let glFragmentShader = createShader(this.gl, name, this.gl.FRAGMENT_SHADER, source);
+      let glProgram = createProgram(this.gl, name, glVertexShader, glFragmentShader);
+      this.gl.deleteShader(glVertexShader);
+      this.gl.deleteShader(glFragmentShader);
+      this.shaders[name] = glProgram;
     }
 
-    // TODO(zellyn): implement
     deleteShaders() {
       for (let name of SHADER_NAMES) {
 	if (this.shaders[name]) {
-	  gl.deleteProgram(this.shaders[name]);
+	  this.gl.deleteProgram(this.shaders[name]);
 	  this.shaders[name] = false;
 	}
       }
     }
-  }
 
-  // Resize the texture with the given name to the next
-  // highest power of two width and height. Wouldn't be
-  // necessary with webgl2.
-  const resizeTexture = (gl, textures, name, width, height) => {
-    let textureInfo = textures[name];
-    if (!!textureInfo) {
-      throw `Cannot find texture named ${name}`;
+    // TODO(zellyn): implement
+    vsync() {
+      // if viewport size has changed:
+      // glViewPort(0, 0, new_width, new_height);
+
+      if (this.imageChanged) {
+	this.uploadImage();
+      }
+
+      // if configuration updated:
+      // configureShaders();
+
+      // if image or configuration updated:
+      // renderImage();
+
+      // if anything updated, or displayPersistence != 0.0
+      // drawDisplayCanvas();
     }
-    if (width < 4) width = 4;
-    if (height < 4) height = 4;
-    width = 2**Math.ceil(Math.log2(width));
-    height = 2**Math.ceil(Math.log2(height));
-    textureInfo.width = width;
-    textureInfo.height = height;
-    gl.bindTexture(gl.TEXTURE_2D, textureInfo.glTexture);
-    const dummy = new Uint8Array(width * height);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, dummy);
-  };
 
-  const vsync = (gl) => {
-    // if viewport size has changed:
-    // glViewPort(0, 0, new_width, new_height);
+    uploadImage() {
+      let image = this.imageInfo;
 
-    // if image updated:
-    // uploadImage();
+      this.resizeTexture("IMAGE_IN", image.width, image.height);
+      let texInfo = this.textures["IMAGE_IN"];
+      gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
+      let format = gl.XYZZY;
+      gl.texSubImage(gl.TEXTURE_2D, 0,
+		     0, 0,
+		     image.width, image.height,
+		     format, gl.UNSIGNED_BYTE, image.pixels);
 
-    // if configuration updated:
-    // configureShaders();
+      // Update configuration
+      if ((image.sampleRate != this.imageSampleRate) ||
+          (image.blackLevel != this.imageBlackLevel) ||
+          (image.whiteLevel != this.imageWhiteLevel) ||
+          (image.subcarrier != this.imageSubcarrier))
+      {
+        this.imageSampleRate = image.sampleRate;
+        this.imageBlackLevel = image.blackLevel;
+        this.imageWhiteLevel = image.whiteLevel;
+        this.imageSubcarrier = image.subcarrier;
 
-    // if image or configuration updated:
-    // renderImage();
+        this.isConfigurationUpdated = true;
+      }
 
-    // if anything updated, or displayPersistence != 0.0
-    // drawDisplayCanvas();
-  };
+      // Upload phase info
+      let texHeight = 2**Math.ceil(Math.log2(image.height));
+      let colorBurst = image.colorBurst
+      let phaseAlternation = image.phaseAlternation;
 
-  // TODO(zellyn): implement
-  const uploadImage = (gl) => {
-  };
+      let phaseInfo = new Float32Array(3 * texHeight);
 
-  // TODO(zellyn): implement
-  const configureShaders = (gl) => {
-  };
+      for (let x = 0; x < image.height; x++) {
+	let c = colorBurst[x % colorBurst.length] / 2 / Math.PI;
+	phaseInfo[3 * x + 0] = c - Math.floor(c);
+	phaseInfo[3 * x + 1] = phaseAlternation[x % phaseAlternation.length];
+      }
 
-  // TODO(zellyn): implement
-  const renderImage = (gl) => {
-  };
+      texInfo = this.textures("IMAGE_PHASEINFO");
+      gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, texHeight, 0,
+		      gl.RGB, gl.FLOAT, phaseInfo);
+    }
 
-  // TODO(zellyn): implement
-  const drawDisplayCanvas = (gl) => {
-  };
+    // TODO(zellyn): implement
+    configureShaders() {
+    }
+
+    // TODO(zellyn): implement
+    renderImage() {
+    }
+
+    // TODO(zellyn): implement
+    drawDisplayCanvas() {
+    }
+
+    // Resize the texture with the given name to the next
+    // highest power of two width and height. Wouldn't be
+    // necessary with webgl2.
+    resizeTexture(name, width, height) {
+      let gl = this.gl;
+      let texInfo = this.textures[name];
+      if (!!texInfo) {
+	throw `Cannot find texture named ${name}`;
+      }
+      if (width < 4) width = 4;
+      if (height < 4) height = 4;
+      width = 2**Math.ceil(Math.log2(width));
+      height = 2**Math.ceil(Math.log2(height));
+      if (texInfo.width != width || texInfo.height != height) {
+	texInfo.width = width;
+	texInfo.height = height;
+	gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
+	const dummy = new Uint8Array(width * height);
+	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0,
+		      gl.LUMINANCE, gl.UNSIGNED_BYTE, dummy);
+      }
+    }
+  }
 
   return {
     C: {
@@ -399,7 +538,9 @@ void main(void)
     },
     loadImage: loadImage,
     screenData: screenData,
-    resizeTexture: resizeTexture,
     getScreenView: (gl) => new ScreenView(gl),
+    resizeCanvas: resizeCanvas,
+    createShader: createShader,
+    createProgram: createProgram,
   };
 })();
