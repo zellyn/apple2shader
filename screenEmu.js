@@ -1,63 +1,63 @@
 "use strict";
 
-let screenEmu = (function () {
+const screenEmu = (function () {
   // From AppleIIVideo.cpp
 
-  let HORIZ_START = 16;
-  let HORIZ_BLANK = (9 + HORIZ_START) // 25;
-  let HORIZ_DISPLAY = 40;
-  let HORIZ_TOTAL = (HORIZ_BLANK + HORIZ_DISPLAY) // 65;
+  const HORIZ_START = 16;
+  const HORIZ_BLANK = (9 + HORIZ_START) // 25;
+  const HORIZ_DISPLAY = 40;
+  const HORIZ_TOTAL = (HORIZ_BLANK + HORIZ_DISPLAY) // 65;
 
-  let CELL_WIDTH = 14;
-  let CELL_HEIGHT = 8;
+  const CELL_WIDTH = 14;
+  const CELL_HEIGHT = 8;
 
-  let VERT_NTSC_START = 38;
-  let VERT_PAL_START = 48;
-  let VERT_DISPLAY = 192;
+  const VERT_NTSC_START = 38;
+  const VERT_PAL_START = 48;
+  const VERT_DISPLAY = 192;
 
-  let BLOCK_WIDTH = HORIZ_DISPLAY; // 40
-  let BLOCK_HEIGHT = (VERT_DISPLAY / CELL_HEIGHT); // 24
+  const BLOCK_WIDTH = HORIZ_DISPLAY; // 40
+  const BLOCK_HEIGHT = (VERT_DISPLAY / CELL_HEIGHT); // 24
 
   // From CanvasInterface.h
 
-  let NTSC_FSC     = 315/88 * 1e6;         // 3579545 = 3.5 Mhz: Color Subcarrier
-  let NTSC_4FSC    = 4 * NTSC_FSC;         // 14318180 = 14.3 Mhz
-  let NTSC_HTOTAL  = (63+5/9) * 1e-6;
-  let NTSC_HLENGTH = (52+8/9) * 1e-6;
-  let NTSC_HHALF   = (35+2/3) * 1e-6;
-  let NTSC_HSTART  = NTSC_HHALF - NTSC_HLENGTH/2;
-  let NTSC_HEND    = NTSC_HHALF + NTSC_HLENGTH/2;
-  let NTSC_VTOTAL  = 262;
-  let NTSC_VLENGTH = 240;
-  let NTSC_VSTART  = 19;
-  let NTSC_VEND    = NTSC_VSTART + NTSC_VLENGTH;
+  const NTSC_FSC     = 315/88 * 1e6;         // 3579545 = 3.5 Mhz: Color Subcarrier
+  const NTSC_4FSC    = 4 * NTSC_FSC;         // 14318180 = 14.3 Mhz
+  const NTSC_HTOTAL  = (63+5/9) * 1e-6;
+  const NTSC_HLENGTH = (52+8/9) * 1e-6;
+  const NTSC_HHALF   = (35+2/3) * 1e-6;
+  const NTSC_HSTART  = NTSC_HHALF - NTSC_HLENGTH/2;
+  const NTSC_HEND    = NTSC_HHALF + NTSC_HLENGTH/2;
+  const NTSC_VTOTAL  = 262;
+  const NTSC_VLENGTH = 240;
+  const NTSC_VSTART  = 19;
+  const NTSC_VEND    = NTSC_VSTART + NTSC_VLENGTH;
 
-  let PAL_FSC      = 4433618.75; // Color subcarrier
-  let PAL_4FSC     = 4 * PAL_FSC;
-  let PAL_HTOTAL   = 64e-6;
-  let PAL_HLENGTH  = 52e-6;
-  let PAL_HHALF    = (37+10/27) * 1e-6;
-  let PAL_HSTART   = PAL_HHALF - PAL_HLENGTH / 2;
-  let PAL_HEND     = PAL_HHALF + PAL_HLENGTH / 2;
-  let PAL_VTOTAL   = 312;
-  let PAL_VLENGTH  = 288;
-  let PAL_VSTART   = 21;
-  let PAL_VEND     = PAL_VSTART + PAL_VLENGTH;
+  const PAL_FSC      = 4433618.75; // Color subcarrier
+  const PAL_4FSC     = 4 * PAL_FSC;
+  const PAL_HTOTAL   = 64e-6;
+  const PAL_HLENGTH  = 52e-6;
+  const PAL_HHALF    = (37+10/27) * 1e-6;
+  const PAL_HSTART   = PAL_HHALF - PAL_HLENGTH / 2;
+  const PAL_HEND     = PAL_HHALF + PAL_HLENGTH / 2;
+  const PAL_VTOTAL   = 312;
+  const PAL_VLENGTH  = 288;
+  const PAL_VSTART   = 21;
+  const PAL_VEND     = PAL_VSTART + PAL_VLENGTH;
 
   // From AppleIIVideo::updateTiming
-  let ntscClockFrequency = NTSC_4FSC * HORIZ_TOTAL / 912;
-  let ntscVisibleRect = [[ntscClockFrequency * NTSC_HSTART, NTSC_VSTART],
+  const ntscClockFrequency = NTSC_4FSC * HORIZ_TOTAL / 912;
+  const ntscVisibleRect = [[ntscClockFrequency * NTSC_HSTART, NTSC_VSTART],
 			 [ntscClockFrequency * NTSC_HLENGTH, NTSC_VLENGTH]];
-  let ntscDisplayRect = [[HORIZ_START, VERT_NTSC_START],
+  const ntscDisplayRect = [[HORIZ_START, VERT_NTSC_START],
 			 [HORIZ_DISPLAY, VERT_DISPLAY]];
-  let ntscVertTotal = NTSC_VTOTAL;
+  const ntscVertTotal = NTSC_VTOTAL;
 
-  let palClockFrequency = 14250450.0 * HORIZ_TOTAL / 912;
-  let palVisibleRect = [[palClockFrequency * PAL_HSTART, PAL_VSTART],
+  const palClockFrequency = 14250450.0 * HORIZ_TOTAL / 912;
+  const palVisibleRect = [[palClockFrequency * PAL_HSTART, PAL_VSTART],
 			[palClockFrequency * PAL_HLENGTH, PAL_VLENGTH]];
-  let palDisplayRect = [[HORIZ_START, VERT_PAL_START],
+  const palDisplayRect = [[HORIZ_START, VERT_PAL_START],
 			[HORIZ_DISPLAY, VERT_DISPLAY]];
-  let palVertTotal = PAL_VTOTAL;
+  const palVertTotal = PAL_VTOTAL;
 
   const VERTEX_SHADER =`
 // an attribute will receive data from a buffer
@@ -77,6 +77,8 @@ void main() {
   const COMPOSITE_SHADER = `
 precision mediump float;
 
+varying vec2 v_texCoord;
+
 uniform sampler2D texture;
 uniform vec2 textureSize;
 uniform float subcarrier;
@@ -84,7 +86,6 @@ uniform sampler2D phaseInfo;
 uniform vec3 c0, c1, c2, c3, c4, c5, c6, c7, c8;
 uniform mat3 decoderMatrix;
 uniform vec3 decoderOffset;
-varying vec2 v_texCoord;
 
 float PI = 3.14159265358979323846264;
 
@@ -120,6 +121,8 @@ void main(void)
   const DISPLAY_SHADER = `
 precision mediump float;
 
+varying vec2 v_texCoord;
+
 uniform sampler2D texture;
 uniform vec2 textureSize;
 uniform float barrel;
@@ -134,7 +137,6 @@ uniform vec2 persistenceSize;
 uniform vec2 persistenceOrigin;
 uniform float persistenceLevel;
 uniform float luminanceGain;
-varying vec2 v_texCoord;
 
 float PI = 3.14159265358979323846264;
 
@@ -164,24 +166,61 @@ void main(void)
 }
 `;
 
+  const RGB_SHADER = `
+precision mediump float;
+
+varying vec2 v_texCoord;
+
+uniform sampler2D texture;
+uniform vec2 textureSize;
+uniform vec3 c0, c1, c2, c3, c4, c5, c6, c7, c8;
+uniform mat3 decoderMatrix;
+uniform vec3 decoderOffset;
+
+vec3 pixel(vec2 q)
+{
+  return texture2D(texture, q).rgb;
+}
+
+vec3 pixels(in vec2 q, in float i)
+{
+  return pixel(vec2(q.x + i, q.y)) + pixel(vec2(q.x - i, q.y));
+}
+
+void main(void)
+{
+  vec2 q = v_texCoord;
+  vec3 c = pixel(q) * c0;
+  c += pixels(q, 1.0 / textureSize.x) * c1;
+  c += pixels(q, 2.0 / textureSize.x) * c2;
+  c += pixels(q, 3.0 / textureSize.x) * c3;
+  c += pixels(q, 4.0 / textureSize.x) * c4;
+  c += pixels(q, 5.0 / textureSize.x) * c5;
+  c += pixels(q, 6.0 / textureSize.x) * c6;
+  c += pixels(q, 7.0 / textureSize.x) * c7;
+  c += pixels(q, 8.0 / textureSize.x) * c8;
+  gl_FragColor = vec4(decoderMatrix * c + decoderOffset, 1.0);
+}
+`;
+
   function buildTiming(clockFrequency, displayRect, visibleRect, vertTotal) {
-    let vertStart = displayRect[0][1];
+    const vertStart = displayRect[0][1];
     // Total number of CPU cycles per frame: 17030 for NTSC.
-    let frameCycleNum = HORIZ_TOTAL * vertTotal;
+    const frameCycleNum = HORIZ_TOTAL * vertTotal;
     // first displayed column.
-    let horizStart = Math.floor(displayRect[0][0]);
+    const horizStart = Math.floor(displayRect[0][0]);
     // imageSize is [14 * visible rect width in cells, visible lines]
-    let imageSize = [Math.floor(CELL_WIDTH * visibleRect[1][0]),
+    const imageSize = [Math.floor(CELL_WIDTH * visibleRect[1][0]),
 		     Math.floor(visibleRect[1][1])];
     // imageLeft is # of pixels from first visible point to first displayed point.
-    let imageLeft = Math.floor((horizStart-visibleRect[0][0]) * CELL_WIDTH);
-    let colorBurst = [2 * Math.PI * (-33/360 + (imageLeft % 4) / 4)];
-    let cycleNum = frameCycleNum + 16;
+    const imageLeft = Math.floor((horizStart-visibleRect[0][0]) * CELL_WIDTH);
+    const colorBurst = [2 * Math.PI * (-33/360 + (imageLeft % 4) / 4)];
+    const cycleNum = frameCycleNum + 16;
 
     // First pixel that OpenEmulator draws when painting normally.
-    let topLeft = [imageLeft, vertStart - visibleRect[0][1]];
+    const topLeft = [imageLeft, vertStart - visibleRect[0][1]];
     // First pixel that OpenEmulator draws when painting 80-column mode.
-    let topLeft80Col = [imageLeft - CELL_WIDTH/2, vertStart - visibleRect[0][1]];
+    const topLeft80Col = [imageLeft - CELL_WIDTH/2, vertStart - visibleRect[0][1]];
 
     return {
       clockFrequency: clockFrequency,
@@ -218,16 +257,16 @@ void main(void)
     if ((image.naturalWidth != 560) || (image.naturalHeight != 192)) {
       throw `screenData expects an image 560x192; got ${image.naturalWidth}x${image.naturalHeight}`;
     }
-    let canvas = document.createElement('canvas');
-    let context = canvas.getContext('2d');
-    let width = details.imageSize[0];
-    let height = details.imageSize[1];
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const width = details.imageSize[0];
+    const height = details.imageSize[1];
     canvas.width = width;
     canvas.height = height;
     context.fillStyle = 'rgba(0,0,0,1)';
     context.fillRect(0, 0, width, height);
     context.drawImage(image, details.topLeft80Col[0], details.topLeft80Col[1]);
-    // let myData = context.getImageData(0, 0, image.naturalWidth, image.naturalHeight);
+    // const myData = context.getImageData(0, 0, image.naturalWidth, image.naturalHeight);
     return canvas;
   };
 
@@ -246,12 +285,13 @@ void main(void)
   const SHADER_NAMES = [
     "COMPOSITE",
     "DISPLAY",
+    "RGB",
   ];
 
   const resizeCanvas = (canvas) => {
     // Lookup the size the browser is displaying the canvas.
-    let displayWidth = canvas.clientWidth;
-    let displayHeight = canvas.clientHeight;
+    const displayWidth = canvas.clientWidth;
+    const displayHeight = canvas.clientHeight;
 
     // Check if the canvas is not the same size.
     if (canvas.width != displayWidth ||
@@ -264,15 +304,15 @@ void main(void)
   // Code from:
   // https://webglfundamentals.org/webgl/lessons/webgl-fundamentals.html
   const createShader = (gl, name, type, source) => {
-    let shader = gl.createShader(type);
+    const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
-    let success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+    const success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
     if (success) {
       return shader;
     }
 
-    let log = gl.getShaderInfoLog(shader);
+    const log = gl.getShaderInfoLog(shader);
     gl.deleteShader(shader);
     throw `unable to compile shader ${name}: \n${log}`;
   };
@@ -280,16 +320,16 @@ void main(void)
   // Code from:
   // https://webglfundamentals.org/webgl/lessons/webgl-fundamentals.html
   const createProgram = (gl, name, ...shaders) => {
-    let program = gl.createProgram();
+    const program = gl.createProgram();
     for (let shader of shaders) {
       gl.attachShader(program, shader);
     }
     gl.linkProgram(program);
-    let success = gl.getProgramParameter(program, gl.LINK_STATUS);
+    const success = gl.getProgramParameter(program, gl.LINK_STATUS);
     if (success) {
       return program;
     }
-    let log = gl.getProgramInfoLog(program);
+    const log = gl.getProgramInfoLog(program);
     gl.deleteProgram(program);
     throw `unable to compile program ${name}: \n${log}`;
   };
@@ -302,6 +342,36 @@ void main(void)
     }
   };
 
+  const DisplayConfiguration = class {
+    constructor() {
+      this.videoDecoder = "CANVAS_RGB";
+      this.videoBrightness = 0;
+      this.videoContrast = 1;
+      this.videoSaturation = 1;
+      this.videoHue = 0;
+      this.videoCenter = [0,0];
+      this.videoSize = [1,1];
+      this.videoBandwidth = 14318180;
+      this.videoLumaBandwidth = 600000;
+      this.videoChromaBandwidth = 2000000;
+      this.videoWhiteOnly = false;
+
+      this.displayResolution = [640, 480];
+      this.displayPixelDensity = 72;
+      this.displayBarrel = 0;
+      this.displayScanlineLevel = 0;
+      this.displayShadowMaskLevel = 0;
+      this.displayShadowMaskDotPitch = 1;
+      this.displayShadowMask = "SHADOWMASK_TRIAD";
+      this.displayPersistence = 0;
+      this.displayCenterLighting = 1;
+      this.displayLuminanceGain = 1;
+    }
+  };
+
+  // Corresponds to OEImage. Contains the data on an NTSC/PAL/whatever
+  // image. The `data` field is an ImageData object with the actual
+  // image data.
   const ImageInfo = class {
     constructor(sampleRate, blackLevel, whiteLevel, subCarrier, colorBurst,
 		phaseAlternation, data) {
@@ -315,13 +385,11 @@ void main(void)
     }
 
     get width() {
-      // TODO(zellyn): implement
-      return 100;
+      return this.data.width;
     }
 
     get height() {
-      // TODO(zellyn): implement
-      return 100;
+      return this.data.height;
     }
   };
 
@@ -338,8 +406,13 @@ void main(void)
       this.imageChanged = true;
     }
 
+    set displayConfiguration(displayConfiguration) {
+      this.display = displayConfiguration;
+      this.configurationChanged = true;
+    }
+
     async initOpenGL() {
-      let gl = this.gl;
+      const gl = this.gl;
 
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -359,7 +432,7 @@ void main(void)
     }
 
     freeOpenGL() {
-      let gl = this.gl;
+      const gl = this.gl;
 
       for (let name of TEXTURE_NAMES) {
 	gl.deleteTexture(this.textures[name].glTexture);
@@ -379,9 +452,9 @@ void main(void)
     }
 
     async loadTexture(path, isMipMap, name) {
-      let gl = this.gl;
-      let texInfo = this.textures[name];
-      let image = await loadImage(path);
+      const gl = this.gl;
+      const texInfo = this.textures[name];
+      const image = await loadImage(path);
       gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA,
 		    gl.RGBA, gl.UNSIGNED_BYTE, image);
@@ -396,14 +469,15 @@ void main(void)
     loadShaders() {
       this.loadShader("COMPOSITE", COMPOSITE_SHADER);
       this.loadShader("DISPLAY", DISPLAY_SHADER);
+      this.loadShader("RGB", RGB_SHADER);
     }
 
     loadShader(name, source) {
       console.log(`ScreenView.loadShader(${name}): not implemented yet`);
 
-      let glVertexShader = createShader(this.gl, name, this.gl.VERTEX_SHADER, VERTEX_SHADER);
-      let glFragmentShader = createShader(this.gl, name, this.gl.FRAGMENT_SHADER, source);
-      let glProgram = createProgram(this.gl, name, glVertexShader, glFragmentShader);
+      const glVertexShader = createShader(this.gl, name, this.gl.VERTEX_SHADER, VERTEX_SHADER);
+      const glFragmentShader = createShader(this.gl, name, this.gl.FRAGMENT_SHADER, source);
+      const glProgram = createProgram(this.gl, name, glVertexShader, glFragmentShader);
       this.gl.deleteShader(glVertexShader);
       this.gl.deleteShader(glFragmentShader);
       this.shaders[name] = glProgram;
@@ -418,7 +492,6 @@ void main(void)
       }
     }
 
-    // TODO(zellyn): implement
     vsync() {
       // if viewport size has changed:
       // glViewPort(0, 0, new_width, new_height);
@@ -427,27 +500,31 @@ void main(void)
 	this.uploadImage();
       }
 
-      // if configuration updated:
-      // configureShaders();
+      if (this.configurationChanged) {
+	this.configureShaders();
+      }
 
-      // if image or configuration updated:
-      // renderImage();
+      if (this.imageChanged || this.configurationChanged) {
+	this.renderImage();
+      }
 
-      // if anything updated, or displayPersistence != 0.0
-      // drawDisplayCanvas();
+      if (this.imageChanged || this.configurationChanged ||
+	  this.image.displayPersistence != 0) {
+	this.drawDisplayCanvas();
+      }
     }
 
     uploadImage() {
-      let image = this.imageInfo;
+      const image = this.imageInfo;
 
       this.resizeTexture("IMAGE_IN", image.width, image.height);
-      let texInfo = this.textures["IMAGE_IN"];
+      const texInfo = this.textures["IMAGE_IN"];
       gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
-      let format = gl.XYZZY;
-      gl.texSubImage(gl.TEXTURE_2D, 0,
-		     0, 0,
-		     image.width, image.height,
-		     format, gl.UNSIGNED_BYTE, image.pixels);
+      const format = gl.LUMINANCE;
+      const type = gl.UNSIGNED_BYTE;
+      gl.texSubImage2D(gl.TEXTURE_2D, 0,
+		       0, 0, // xoffset, yoffset
+		       format, type, image.data);
 
       // Update configuration
       if ((image.sampleRate != this.imageSampleRate) ||
@@ -460,18 +537,18 @@ void main(void)
         this.imageWhiteLevel = image.whiteLevel;
         this.imageSubcarrier = image.subcarrier;
 
-        this.isConfigurationUpdated = true;
+        this.configurationChanged = true;
       }
 
       // Upload phase info
-      let texHeight = 2**Math.ceil(Math.log2(image.height));
-      let colorBurst = image.colorBurst
-      let phaseAlternation = image.phaseAlternation;
+      const texHeight = 2**Math.ceil(Math.log2(image.height));
+      const colorBurst = image.colorBurst
+      const phaseAlternation = image.phaseAlternation;
 
-      let phaseInfo = new Float32Array(3 * texHeight);
+      const phaseInfo = new Float32Array(3 * texHeight);
 
       for (let x = 0; x < image.height; x++) {
-	let c = colorBurst[x % colorBurst.length] / 2 / Math.PI;
+	const c = colorBurst[x % colorBurst.length] / 2 / Math.PI;
 	phaseInfo[3 * x + 0] = c - Math.floor(c);
 	phaseInfo[3 * x + 1] = phaseAlternation[x % phaseAlternation.length];
       }
@@ -482,8 +559,34 @@ void main(void)
 		      gl.RGB, gl.FLOAT, phaseInfo);
     }
 
-    // TODO(zellyn): implement
+    getRenderShader() {
+      switch (this.display.videoDecoder) {
+      case "CANVAS_RGB":
+      case "CANVAS_MONOCHROME":
+	return [this.shaders["RGB"], "RGB"];
+      case "CANVAS_YUV":
+      case "CANVAS_YIQ":
+      case "CANVAS_CXA2025AS":
+	return [this.shaders["COMPOSITE"], "COMPOSITE"];
+      }
+      return [null, null];
+    }
+
     configureShaders() {
+      const gl = this.gl;
+
+      const [renderShader, renderShaderName] = this.getRenderShader();
+      const displayShader = this.shaders["DISPLAY"];
+
+      if (!renderShader || !displayShader)
+	return;
+
+      const isCompositeShader = (renderShaderName == "RGB");
+
+      // Render shader
+      gl.useProgram(renderShader);
+
+      // TODO(zellyn): implement the rest
     }
 
     // TODO(zellyn): implement
@@ -498,8 +601,8 @@ void main(void)
     // highest power of two width and height. Wouldn't be
     // necessary with webgl2.
     resizeTexture(name, width, height) {
-      let gl = this.gl;
-      let texInfo = this.textures[name];
+      const gl = this.gl;
+      const texInfo = this.textures[name];
       if (!!texInfo) {
 	throw `Cannot find texture named ${name}`;
       }
@@ -538,9 +641,13 @@ void main(void)
     },
     loadImage: loadImage,
     screenData: screenData,
-    getScreenView: (gl) => new ScreenView(gl),
     resizeCanvas: resizeCanvas,
     createShader: createShader,
     createProgram: createProgram,
+
+    // Classes.
+    ScreenView: ScreenView,
+    DisplayConfiguration: DisplayConfiguration,
+    ImageInfo: ImageInfo,
   };
 })();
