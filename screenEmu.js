@@ -44,6 +44,11 @@ const screenEmu = (function () {
   const PAL_VSTART   = 21;
   const PAL_VEND     = PAL_VSTART + PAL_VLENGTH;
 
+  // From OpenGLCanvas.cpp
+  const NTSC_I_CUTOFF = 1300000;
+  const NTSC_Q_CUTOFF = 600000;
+  const NTSC_IQ_DELTA = NTSC_I_CUTOFF - NTSC_Q_CUTOFF;
+
   // From AppleIIVideo::updateTiming
   const ntscClockFrequency = NTSC_4FSC * HORIZ_TOTAL / 912;
   const ntscVisibleRect = [[ntscClockFrequency * NTSC_HSTART, NTSC_VSTART],
@@ -237,6 +242,150 @@ void main(void)
       topLeft: topLeft,
       topLeft80Col: topLeft80Col,
     };
+  }
+
+
+  const Vector = class {
+    constructor(n) {
+      this.data = new Float32Array(n);
+    }
+
+    // Normalize the vector.
+    normalize() {
+      const vec = this.data;
+      let sum = 0;
+      for (const item of vec) {
+	sum += item;
+      }
+      const gain = 1/sum;
+      for (const i in vec) {
+	vec[i] *= gain;
+      }
+      return this;
+    }
+
+    // Multiply this Vector by another, or by a number.
+    mul(other) {
+      const w = new Vector(0);
+      if ((typeof other != "number") && (this.data.length != other.data.length)) {
+	return w;
+      }
+
+      w.data = new Float32Array(this.data);
+
+      for (let i = 0; i < w.data.length; i++) {
+	if (typeof other == "number") {
+	  w.data[i] *= other;
+	} else {
+	  w.data[i] *= other.data[i];
+	}
+      }
+
+      return w;
+    }
+
+    realIDFT() {
+      const size = this.data.length;
+      const w = new Vector(size);
+      for (let i = 0; i < size; i++) {
+	const omega = 2 * Math.PI * i / size;
+
+	for (let j = 0; j < size; j++) {
+	  w.data[i] += this.data[j] * Math.cos(j * omega);
+	}
+      }
+
+      for (let i = 0; i < size; i++) {
+	w.data[i] /= size;
+      }
+
+      return w;
+    }
+
+    resize(n) {
+      const newData = new Float32Array(n);
+      for (let i=0; i < Math.min(newData.length, this.data.length); i++) {
+	newData[i] = this.data[i];
+      }
+      this.data = newData;
+      return this;
+    }
+
+    // Chebyshev Window
+    //
+    // Based on ideas at:
+    // http://www.dsprelated.com/showarticle/42.php
+    //
+    static chebyshevWindow(n, sidelobeDb) {
+      const m = n - 1;
+      let w = new Vector(m);
+
+      const alpha = Math.cosh(Math.acosh(Math.pow(10, sidelobeDb / 20)) / m);
+      for (let i = 0; i < m; i++) {
+      	const a = Math.abs(alpha * Math.cos(Math.PI * i / m));
+      	if (a > 1)
+      	  w.data[i] = Math.pow(-1, i) * Math.cosh(m * Math.acosh(a));
+      	else
+      	  w.data[i] = Math.pow(-1, i) * Math.cos(m * Math.acos(a));
+      }
+
+      w = w.realIDFT();
+
+      w.resize(n);
+      w.data[0] /= 2;
+      w.data[n-1] = w.data[0];
+
+      const max = w.data.reduce((prev, cur) => Math.max(prev, Math.abs(cur)));
+      for (const i in w.data) {
+      	w.data[i] /= max;
+      }
+
+      return w;
+    }
+
+    // Lanczos Window
+    static lanczosWindow(n, fc) {
+      let v = new Vector(n);
+      fc = Math.min(fc, 0.5);
+      const halfN = Math.floor(n / 2);
+
+      for (let i = 0; i < n; i++) {
+	const x = 2 * Math.PI * fc * (i - halfN);
+
+	v.data[i] = (x == 0.0) ? 1.0 : Math.sin(x) / x;
+      }
+
+      return v;
+    }
+
+  };
+
+  const Matrix3 = class {
+    constructor(c00, c01, c02,
+		c10, c11, c12,
+		c20, c21, c22) {
+      this.data = new Float32Array([c00, c01, c02, c10, c11, c12, c20, c21, c22]);
+    }
+
+    at(i, j) {
+      return this.data[3 * i + j];
+    }
+
+    mul(val) {
+      const m = new Matrix3(0,0,0,0,0,0,0,0,0);
+      if (typeof val == "number") {
+	m.data = m.data.map(x => x * val);
+      } else {
+	for (let i = 0; i < 3; i++) {
+	  for (let j = 0; j < 3; j++) {
+	    for (let k = 0; k < 3; k++) {
+	      m.data[i * 3 + j] += val.data[i * 3 + k] * this.data[k * 3 + j];
+	    }
+	  }
+	}
+      }
+      return m;
+    }
   }
 
   // https://codereview.stackexchange.com/a/128619
@@ -581,10 +730,154 @@ void main(void)
       if (!renderShader || !displayShader)
 	return;
 
-      const isCompositeShader = (renderShaderName == "RGB");
+      const isCompositeDecoder = (renderShaderName == "RGB");
 
       // Render shader
       gl.useProgram(renderShader);
+
+      // Subcarrier
+      if (isCompositeDecoder) {
+	gl.uniform1f(gl.getUniformLocation(renderShader, "subcarrier"),
+		     this.imageSubcarrier / this.imageSampleRate);
+      }
+
+      // Filters
+      const w = Vector.chebyshevWindow(17, 50).normalize();
+
+      let wy, wu, wv;
+
+      const bandwidth = this.display.videoBandwidth / this.imageSampleRate;
+
+      if (isCompositeDecoder) {
+	let yBandwidth = this.display.videoLumaBandwidth / this.imageSampleRate;
+	let uBandwidth = this.display.videoChromaBandwidth / this.imageSampleRate;
+	let vBandwidth = uBandwidth;
+
+	if (this.display.videoDecoder == "CANVAS_YIQ")
+	  uBandwidth = uBandwidth + NTSC_IQ_DELTA / this.imageSampleRate;
+
+        // Switch to video bandwidth when no subcarrier
+        if ((this.imageSubcarrier == 0.0) || this.display.videoWhiteOnly)
+        {
+            yBandwidth = bandwidth;
+            uBandwidth = bandwidth;
+            vBandwidth = bandwidth;
+        }
+
+        wy = w.mul(Vector.lanczosWindow(17, yBandwidth));
+        wy = wy.normalize();
+
+        wu = w.mul(Vector.lanczosWindow(17, uBandwidth));
+        wu = wu.normalize() * 2;
+
+        wv = w.mul(Vector.lanczosWindow(17, vBandwidth));
+        wv = wv.normalize() * 2;
+      } else {
+        wy = w.mul(Vector.lanczosWindow(17, bandwidth));
+        wu = wv = wy = wy.normalize();
+      }
+
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c0"),
+		   wy.data[8], wu.data[8], wv.data[8]);
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c1"),
+		   wy.data[7], wu.data[7], wv.data[7]);
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c2"),
+		   wy.data[6], wu.data[6], wv.data[6]);
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c3"),
+		   wy.data[5], wu.data[5], wv.data[5]);
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c4"),
+		   wy.data[4], wu.data[4], wv.data[4]);
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c5"),
+		   wy.data[3], wu.data[3], wv.data[3]);
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c6"),
+		   wy.data[2], wu.data[2], wv.data[2]);
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c7"),
+		   wy.data[1], wu.data[1], wv.data[1]);
+      gl.uniform3f(gl.getUniformLocation(renderShader, "c8"),
+		   wy.data[0], wu.data[0], wv.data[0]);
+
+      // Decoder matrix
+      let decoderMatrix = new Matrix3(1, 0, 0,
+				      0, 1, 0,
+				      0, 0, 1);
+
+      // Encode
+      if (!isCompositeDecoder) {
+        // Y'PbPr encoding matrix
+        decoderMatrix = new Matrix3(0.299, -0.168736, 0.5,
+                                    0.587, -0.331264, -0.418688,
+                                    0.114, 0.5, -0.081312).mul(decoderMatrix);
+      }
+
+      // Set hue
+      if (this.display.videoDecoder == "CANVAS_MONOCHROME")
+        decoderMatrix = new Matrix3(1, 0.5, 0,
+                                    0, 0, 0,
+                                    0, 0, 0).mul(decoderMatrix);
+
+      // Disable color decoding when no subcarrier
+      if (isCompositeDecoder)
+      {
+        if ((imageSubcarrier == 0.0) || this.display.videoWhiteOnly) {
+          decoderMatrix = new Matrix3(1, 0, 0,
+                                      0, 0, 0,
+                                      0, 0, 0).mul(decoderMatrix);
+        }
+      }
+
+      // Saturation
+      decoderMatrix = new Matrix3(1, 0, 0,
+				  0, display.videoSaturation, 0,
+				  0, 0, display.videoSaturation).mul(decoderMatrix);
+
+      // Hue
+      const hue = 2 * Math.PI * this.display.videoHue;
+
+      decoderMatrix = new Matrix3(1, 0, 0,
+				  0, Math.cos(hue), -Math.sin(hue),
+				  0, Math.sin(hue), Math.cos(hue)).mul(decoderMatrix);
+
+      // Decode
+      switch (this.display.videoDecoder) {
+      case "CANVAS_RGB":
+      case "CANVAS_MONOCHROME":
+        // Y'PbPr decoder matrix
+        decoderMatrix = new Matrix3(1, 1, 1,
+                                    0, -0.344136, 1.772,
+                                    1.402, -0.714136, 0).mul(decoderMatrix);
+        break;
+
+      case "CANVAS_YUV":
+      case "CANVAS_YIQ":
+        // Y'UV decoder matrix
+        decoderMatrix = new Matrix3(1, 1, 1,
+                                    0, -0.394642, 2.032062,
+                                    1.139883, -0.580622, 0).mul(decoderMatrix);
+        break;
+
+      case "CANVAS_CXA2025AS":
+        // Exchange I and Q
+        decoderMatrix = new Matrix3(1, 0, 0,
+                                    0, 0, 1,
+                                    0, 1, 0).mul(decoderMatrix);
+
+        // Rotate 33 degrees
+        hue = -Math.PI * 33 / 180;
+        decoderMatrix = new Matrix3(1, 0, 0,
+                                    0, Math.cos(hue), -Math.sin(hue),
+                                    0, Math.sin(hue), Math.cos(hue)).mul(decoderMatrix);
+
+        // CXA2025AS decoder matrix
+        decoderMatrix = new Matrix3(1, 1, 1,
+                                    1.630, -0.378, -1.089,
+                                    0.317, -0.466, 1.677).mul(decoderMatrix);
+        break;
+      default:
+	throw `unknown videoDecoder: ${this.display.videoDecoder}`;
+      }
+
+      // Brightness
+
 
       // TODO(zellyn): implement the rest
     }
@@ -634,6 +927,9 @@ void main(void)
       VERT_DISPLAY: VERT_DISPLAY,
       BLOCK_WIDTH: BLOCK_WIDTH,
       BLOCK_HEIGHT: BLOCK_HEIGHT,
+      NTSC_I_CUTOFF: NTSC_I_CUTOFF,
+      NTSC_Q_CUTOFF: NTSC_Q_CUTOFF,
+      NTSC_IQ_DELTA: NTSC_IQ_DELTA,
       NTSC_DETAILS: buildTiming(ntscClockFrequency, ntscDisplayRect,
 				ntscVisibleRect, ntscVertTotal),
       PAL_DETAILS: buildTiming(palClockFrequency, palDisplayRect,
@@ -649,5 +945,6 @@ void main(void)
     ScreenView: ScreenView,
     DisplayConfiguration: DisplayConfiguration,
     ImageInfo: ImageInfo,
+    Vector: Vector,
   };
 })();
