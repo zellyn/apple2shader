@@ -227,11 +227,19 @@ void main() {
       let gl = canvas.getContext("webgl");
       let sv = new screenEmu.ScreenView(gl);
       await sv.initOpenGL();
+
+      let imageInfo = new screenEmu.ImageInfo(0, 0, 0, 0, 0, 0, new ImageData(10, 10));
+      let displayConfig = new screenEmu.DisplayConfiguration();
+      sv.image = imageInfo;
+      sv.displayConfiguration = displayConfig;
+      sv.vsync();
+
       sv.freeOpenGL();
     }
 
-    tryScreenView().then(() => console.log('tryScreenView: success'))
-    .catch((e) => console.log(`tryScreenView: error: ${e}`));
+    tryScreenView().then(() => console.log('tryScreenView: success'));
+
+    const w = screenEmu.Vector.lanczosWindow(17, 0.419047624);
 
   </script>
 </body>

@@ -404,7 +404,8 @@ void main(void)
   // returns: a canvas
   const screenData = (image, details) => {
     if ((image.naturalWidth != 560) || (image.naturalHeight != 192)) {
-      throw `screenData expects an image 560x192; got ${image.naturalWidth}x${image.naturalHeight}`;
+      throw new Error('screenData expects an image 560x192;' +
+		      ` got ${image.naturalWidth}x${image.naturalHeight}`);
     }
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
@@ -463,7 +464,7 @@ void main(void)
 
     const log = gl.getShaderInfoLog(shader);
     gl.deleteShader(shader);
-    throw `unable to compile shader ${name}: \n${log}`;
+    throw new Error(`unable to compile shader ${name}: \n${log}`);
   };
 
   // Code from:
@@ -480,7 +481,7 @@ void main(void)
     }
     const log = gl.getProgramInfoLog(program);
     gl.deleteProgram(program);
-    throw `unable to compile program ${name}: \n${log}`;
+    throw new Error(`unable to compile program ${name}: \n${log}`);
   };
 
   const TextureInfo = class {
@@ -524,6 +525,12 @@ void main(void)
   const ImageInfo = class {
     constructor(sampleRate, blackLevel, whiteLevel, subCarrier, colorBurst,
 		phaseAlternation, data) {
+      if (typeof data != "object") {
+	throw new Error(`want typeof data == 'object'; got '${typeof data}'`);
+      }
+      if (!(data instanceof ImageData)) {
+	throw new Error(`want data instanceof ImageData; got '${data.constructor.name}'`);
+      }
       this.sampleRate = sampleRate;
       this.blackLevel = blackLevel;
       this.whiteLevel = whiteLevel;
@@ -544,14 +551,30 @@ void main(void)
 
   const ScreenView = class {
     constructor(gl) {
+      const float_texture_ext = gl.getExtension('OES_texture_float');
+      if (float_texture_ext == null) {
+	throw new Error("WebGL extension 'OES_texture_float' unavailable");
+      }
+
       this.gl = gl;
       this.textures = {};
       this.shaders = {};
       this.image = null;
+      this.display = null;
+      this.configurationChanged = true;
+      this.imageChanged = true;
+      this.imageSampleRate = null;
+      this.imageBlackLevel = null;
+      this.imageWhiteLevel = null;
+      this.imageSubcarrier = null;
     }
 
-    set image(imageInfo) {
-      this.imageInfo = imageInfo;
+    get image() {
+      return this._image
+    }
+
+    set image(image) {
+      this._image = image;
       this.imageChanged = true;
     }
 
@@ -622,8 +645,6 @@ void main(void)
     }
 
     loadShader(name, source) {
-      console.log(`ScreenView.loadShader(${name}): not implemented yet`);
-
       const glVertexShader = createShader(this.gl, name, this.gl.VERTEX_SHADER, VERTEX_SHADER);
       const glFragmentShader = createShader(this.gl, name, this.gl.FRAGMENT_SHADER, source);
       const glProgram = createProgram(this.gl, name, glVertexShader, glFragmentShader);
@@ -664,16 +685,17 @@ void main(void)
     }
 
     uploadImage() {
-      const image = this.imageInfo;
+      const gl = this.gl;
+      const image = this.image;
 
       this.resizeTexture("IMAGE_IN", image.width, image.height);
-      const texInfo = this.textures["IMAGE_IN"];
-      gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
+      const texInfoImage = this.textures["IMAGE_IN"];
+      gl.bindTexture(gl.TEXTURE_2D, texInfoImage.glTexture);
       const format = gl.LUMINANCE;
       const type = gl.UNSIGNED_BYTE;
       gl.texSubImage2D(gl.TEXTURE_2D, 0,
-		       0, 0, // xoffset, yoffset
-		       format, type, image.data);
+      		       0, 0, // xoffset, yoffset
+      		       format, type, image.data);
 
       // Update configuration
       if ((image.sampleRate != this.imageSampleRate) ||
@@ -702,10 +724,10 @@ void main(void)
 	phaseInfo[3 * x + 1] = phaseAlternation[x % phaseAlternation.length];
       }
 
-      texInfo = this.textures("IMAGE_PHASEINFO");
-      gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
+      const texInfoPhase = this.textures["IMAGE_PHASEINFO"];
+      gl.bindTexture(gl.TEXTURE_2D, texInfoPhase.glTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, texHeight, 0,
-		      gl.RGB, gl.FLOAT, phaseInfo);
+		    gl.RGB, gl.FLOAT, phaseInfo);
     }
 
     getRenderShader() {
@@ -768,10 +790,10 @@ void main(void)
         wy = wy.normalize();
 
         wu = w.mul(Vector.lanczosWindow(17, uBandwidth));
-        wu = wu.normalize() * 2;
+        wu = wu.normalize().mul(2);
 
         wv = w.mul(Vector.lanczosWindow(17, vBandwidth));
-        wv = wv.normalize() * 2;
+        wv = wv.normalize().mul(2);
       } else {
         wy = w.mul(Vector.lanczosWindow(17, bandwidth));
         wu = wv = wy = wy.normalize();
@@ -818,7 +840,7 @@ void main(void)
       // Disable color decoding when no subcarrier
       if (isCompositeDecoder)
       {
-        if ((imageSubcarrier == 0.0) || this.display.videoWhiteOnly) {
+        if ((this.imageSubcarrier == 0.0) || this.display.videoWhiteOnly) {
           decoderMatrix = new Matrix3(1, 0, 0,
                                       0, 0, 0,
                                       0, 0, 0).mul(decoderMatrix);
@@ -827,8 +849,8 @@ void main(void)
 
       // Saturation
       decoderMatrix = new Matrix3(1, 0, 0,
-				  0, display.videoSaturation, 0,
-				  0, 0, display.videoSaturation).mul(decoderMatrix);
+				  0, this.display.videoSaturation, 0,
+				  0, 0, this.display.videoSaturation).mul(decoderMatrix);
 
       // Hue
       const hue = 2 * Math.PI * this.display.videoHue;
@@ -873,13 +895,76 @@ void main(void)
                                     0.317, -0.466, 1.677).mul(decoderMatrix);
         break;
       default:
-	throw `unknown videoDecoder: ${this.display.videoDecoder}`;
+	throw new Error(`unknown videoDecoder: ${this.display.videoDecoder}`);
       }
 
       // Brightness
+      const brightness = this.display.videoBrightness - this.imageBlackLevel;
+      let decoderOffset;
 
+      if (isCompositeDecoder)
+        decoderOffset = decoderMatrix.mul(new Matrix3(brightness, 0, 0,
+                                                      0, 0, 0,
+                                                      0, 0, 0));
+      else
+        decoderOffset = decoderMatrix.mul(new Matrix3(brightness, 0, 0,
+                                                      brightness, 0, 0,
+                                                      brightness, 0, 0));
 
-      // TODO(zellyn): implement the rest
+      gl.uniform3f(gl.getUniformLocation(renderShader, "decoderOffset"),
+                   decoderOffset.at(0, 0),
+                   decoderOffset.at(0, 1),
+                   decoderOffset.at(0, 2));
+
+      // Contrast
+      let contrast = this.display.videoContrast;
+
+      const videoLevel = (this.imageWhiteLevel - this.imageBlackLevel);
+      if (videoLevel > 0)
+        contrast /= videoLevel;
+      else
+        contrast = 0;
+
+      if (contrast < 0)
+        contrast = 0;
+
+      decoderMatrix = decoderMatrix.mul(contrast);
+
+      gl.uniformMatrix3fv(gl.getUniformLocation(renderShader, "decoderMatrix"),
+			  false, decoderMatrix.data);
+
+      // Display shader
+      gl.useProgram(displayShader);
+
+      // Barrel
+      gl.uniform1f(gl.getUniformLocation(displayShader, "barrel"),
+                   this.display.displayBarrel);
+
+      // Shadow mask
+      gl.uniform1i(gl.getUniformLocation(displayShader, "shadowMask"), 1);
+      gl.uniform1f(gl.getUniformLocation(displayShader, "shadowMaskLevel"),
+                   this.display.displayShadowMaskLevel);
+
+      // Persistence
+      const frameRate = 60;
+
+      gl.uniform1f(gl.getUniformLocation(displayShader, "persistenceLevel"),
+                   this.display.displayPersistence /
+                   (1.0 / frameRate + this.display.displayPersistence));
+
+      if (this.display.displayPersistence == 0)
+        this.resizeTexture("IMAGE_PERSISTENCE", 0, 0);
+
+      // Center lighting
+      let centerLighting = this.display.displayCenterLighting;
+      if (Math.abs(centerLighting) < 0.001)
+        centerLighting = 0.001;
+      gl.uniform1f(gl.getUniformLocation(displayShader, "centerLighting"),
+                   1.0 / centerLighting - 1);
+
+      // Luminance gain
+      gl.uniform1f(gl.getUniformLocation(displayShader, "luminanceGain"),
+                   this.display.displayLuminanceGain);
     }
 
     // TODO(zellyn): implement
@@ -896,8 +981,8 @@ void main(void)
     resizeTexture(name, width, height) {
       const gl = this.gl;
       const texInfo = this.textures[name];
-      if (!!texInfo) {
-	throw `Cannot find texture named ${name}`;
+      if (!texInfo) {
+	throw new Error(`Cannot find texture named ${name}`);
       }
       if (width < 4) width = 4;
       if (height < 4) height = 4;
