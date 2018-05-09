@@ -244,6 +244,62 @@ void main(void)
     };
   }
 
+  const Point = class {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+    }
+  }
+
+  const Size = class {
+    constructor(width, height) {
+      this.width = width;
+      this.height = height;
+    }
+
+    copy() {
+      return new Size(this.width, this.height);
+    }
+  }
+
+  const Rect = class {
+    constructor(x, y, width, height) {
+      this.origin = new Point(x, y);
+      this.size = new Size(width, height);
+    }
+
+    get x() {
+      return this.origin.x;
+    }
+
+    get y() {
+      return this.origin.y;
+    }
+
+    get width() {
+      return this.size.width;
+    }
+
+    get height() {
+      return this.size.height;
+    }
+
+    get l() {
+      return this.origin.x;
+    }
+
+    get r() {
+      return this.origin.x + this.size.width;
+    }
+
+    get t() {
+      return this.origin.y;
+    }
+
+    get b() {
+      return this.origin.y + this.size.height;
+    }
+  }
 
   const Vector = class {
     constructor(n) {
@@ -432,6 +488,11 @@ void main(void)
     "IMAGE_PERSISTENCE",
   ];
 
+  const BUFFER_NAMES = [
+    "POSITION",
+    "TEXCOORD",
+  ];
+
   const SHADER_NAMES = [
     "COMPOSITE",
     "DISPLAY",
@@ -490,11 +551,15 @@ void main(void)
       this.height = height;
       this.glTexture = glTexture;
     }
+
+    get size() {
+      return new Size(this.width, this.height);
+    }
   };
 
   const DisplayConfiguration = class {
     constructor() {
-      this.videoDecoder = "CANVAS_RGB";
+      this.videoDecoder = "CANVAS_YUV";
       this.videoBrightness = 0;
       this.videoContrast = 1;
       this.videoSaturation = 1;
@@ -547,26 +612,36 @@ void main(void)
     get height() {
       return this.data.height;
     }
+
+    get size() {
+      return new Size(this.data.width, this.data.height);
+    }
   };
 
   const ScreenView = class {
-    constructor(gl) {
+    constructor(canvas) {
+      const gl = canvas.getContext("webgl");
       const float_texture_ext = gl.getExtension('OES_texture_float');
       if (float_texture_ext == null) {
 	throw new Error("WebGL extension 'OES_texture_float' unavailable");
       }
 
+      this.canvas = canvas;
       this.gl = gl;
       this.textures = {};
       this.shaders = {};
+      this.buffers = {};
       this.image = null;
       this.display = null;
-      this.configurationChanged = true;
-      this.imageChanged = true;
       this.imageSampleRate = null;
       this.imageBlackLevel = null;
       this.imageWhiteLevel = null;
       this.imageSubcarrier = null;
+      this.viewportSize = new Size(0, 0);
+
+      this.configurationChanged = true;
+      this.imageChanged = true;
+      this.shaderEnabled = true;
     }
 
     get image() {
@@ -595,6 +670,10 @@ void main(void)
 	this.textures[name] = new TextureInfo(0, 0, gl.createTexture());
       }
 
+      for (let name of BUFFER_NAMES) {
+	this.buffers[name] = gl.createBuffer();
+      }
+
       await this.loadTextures();
 
       gl.pixelStorei(gl.PACK_ALIGNMENT, 1);
@@ -608,6 +687,10 @@ void main(void)
 
       for (let name of TEXTURE_NAMES) {
 	gl.deleteTexture(this.textures[name].glTexture);
+      }
+
+      for (let name of BUFFER_NAMES) {
+	gl.deleteBuffer(this.buffers[name]);
       }
 
       this.deleteShaders();
@@ -663,8 +746,18 @@ void main(void)
     }
 
     vsync() {
+      const gl = this.gl;
+      resizeCanvas(this.canvas);
+      const canvasWidth = this.canvas.width;
+      const canvasHeight = this.canvas.height;
+
       // if viewport size has changed:
-      // glViewPort(0, 0, new_width, new_height);
+      if ((this.viewportSize.width != canvasWidth)
+	  || (this.viewportSize.height != this.canvasHeight)) {
+	this.viewportSize = new Size(canvasWidth, canvasHeight);
+	gl.viewport(0, 0, canvasWidth, canvasHeight);
+	this.configurationChanged = true;
+      }
 
       if (this.imageChanged) {
 	this.uploadImage();
@@ -752,7 +845,7 @@ void main(void)
       if (!renderShader || !displayShader)
 	return;
 
-      const isCompositeDecoder = (renderShaderName == "RGB");
+      const isCompositeDecoder = (renderShaderName == "COMPOSITE");
 
       // Render shader
       gl.useProgram(renderShader);
@@ -967,8 +1060,126 @@ void main(void)
                    this.display.displayLuminanceGain);
     }
 
-    // TODO(zellyn): implement
     renderImage() {
+      const gl = this.gl;
+      const [renderShader, renderShaderName] = this.getRenderShader();
+      if (!renderShader || !this.shaderEnabled)
+	return;
+
+      const isCompositeDecoder = (renderShaderName == "COMPOSITE");
+
+      gl.useProgram(renderShader);
+
+      const texSize = this.textures["IMAGE_IN"].size;
+      this.resizeTexture("IMAGE_DECODED", texSize.width, texSize.height);
+
+      gl.uniform1i(gl.getUniformLocation(renderShader, "texture"), 0);
+      gl.uniform2f(gl.getUniformLocation(renderShader, "textureSize"),
+                   texSize.width, texSize.height);
+
+      if (isCompositeDecoder)
+      {
+        gl.uniform1i(gl.getUniformLocation(renderShader, "phaseInfo"), 1);
+
+        gl.activeTexture(gl.TEXTURE1);
+
+        gl.bindTexture(gl.TEXTURE_2D, this.textures["IMAGE_PHASEINFO"].glTexture);
+
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+        gl.activeTexture(gl.TEXTURE0);
+      }
+
+      // Render to the back buffer, to avoid using FBOs
+      // (support for vanilla OpenGL 2.0 cards)
+
+      // I think webgl is rendering to the back buffer anyway, until
+      // we stop executing javascript statements and give control
+      // back, at which point it flips. So we might not need
+      // this. Although truly, I'm not certain what it's doing. If we
+      // *do* end up needing it, we'll have to go full webgl2.
+
+      // glReadBuffer(GL_BACK);
+
+      const imageSize = this.image.size;
+
+      for (let y = 0; y < this.image.height; y += this.viewportSize.height) {
+	for (let x = 0; x < this.image.width; x += this.viewportSize.width) {
+          // Calculate rects
+          const clipSize = this.viewportSize.copy();
+
+          if ((x + clipSize.width) > imageSize.width)
+            clipSize.width = imageSize.width - x;
+          if ((y + clipSize.height) > imageSize.height)
+            clipSize.height = imageSize.height - y;
+          const textureRect = new Rect(x / texSize.width,
+                                       y / texSize.height,
+                                       clipSize.width / texSize.width,
+                                       clipSize.height / texSize.height);
+          const canvasRect = new Rect(-1,
+                                      -1,
+                                      2 * clipSize.width / this.viewportSize.width,
+                                      2 * clipSize.height / this.viewportSize.height);
+
+          // Render
+          gl.bindTexture(gl.TEXTURE_2D, this.textures["IMAGE_IN"].glTexture);
+
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+	  // What is this, some ancient fixed pipeline nonsense? No way.
+          // glLoadIdentity();
+
+	  const positionLocation = gl.getAttribLocation(renderShader, "a_position");
+	  const texcoordLocation = gl.getAttribLocation(renderShader, "a_texCoord");
+	  const positionBuffer = this.buffers["POSITION"];
+	  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+	  const p_x1 = canvasRect.l;
+	  const p_x2 = canvasRect.r;
+	  const p_y1 = canvasRect.t;
+	  const p_y2 = canvasRect.b;
+	  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+	    p_x1, p_y1,
+	    p_x2, p_y1,
+	    p_x1, p_y2,
+	    p_x1, p_y2,
+	    p_x2, p_y1,
+	    p_x2, p_y2,
+	  ]), gl.STATIC_DRAW);
+
+	  const texcoordBuffer = this.buffers["TEXCOORD"];
+	  gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+	  const t_x1 = textureRect.l;
+	  const t_x2 = textureRect.r;
+	  const t_y1 = textureRect.t;
+	  const t_y2 = textureRect.b;
+	  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+	    t_x1, t_y1,
+	    t_x2, t_y1,
+	    t_x1, t_y2,
+	    t_x1, t_y2,
+	    t_x2, t_y1,
+	    t_x2, t_y2,
+	  ]), gl.STATIC_DRAW);
+
+	  gl.clearColor(0, 0, 0, 0);
+	  gl.clear(gl.COLOR_BUFFER_BIT);
+
+	  gl.enableVertexAttribArray(positionLocation);
+	  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+	  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+	  gl.enableVertexAttribArray(texcoordLocation);
+	  gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+	  gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+	  gl.drawArrays(gl.TRIANGLES, 0, 6);
+	}
+      }
+
+
+      // TODO(zellyn): implement
     }
 
     // TODO(zellyn): implement

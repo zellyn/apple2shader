@@ -224,8 +224,7 @@ void main() {
 
     async function tryScreenView() {
       let canvas = document.getElementById("d");
-      let gl = canvas.getContext("webgl");
-      let sv = new screenEmu.ScreenView(gl);
+      let sv = new screenEmu.ScreenView(canvas);
       await sv.initOpenGL();
 
       let imageInfo = new screenEmu.ImageInfo(0, 0, 0, 0, 0, 0, new ImageData(10, 10));
