@@ -52,16 +52,16 @@ const screenEmu = (function () {
   // From AppleIIVideo::updateTiming
   const ntscClockFrequency = NTSC_4FSC * HORIZ_TOTAL / 912;
   const ntscVisibleRect = [[ntscClockFrequency * NTSC_HSTART, NTSC_VSTART],
-			 [ntscClockFrequency * NTSC_HLENGTH, NTSC_VLENGTH]];
+                         [ntscClockFrequency * NTSC_HLENGTH, NTSC_VLENGTH]];
   const ntscDisplayRect = [[HORIZ_START, VERT_NTSC_START],
-			 [HORIZ_DISPLAY, VERT_DISPLAY]];
+                         [HORIZ_DISPLAY, VERT_DISPLAY]];
   const ntscVertTotal = NTSC_VTOTAL;
 
   const palClockFrequency = 14250450.0 * HORIZ_TOTAL / 912;
   const palVisibleRect = [[palClockFrequency * PAL_HSTART, PAL_VSTART],
-			[palClockFrequency * PAL_HLENGTH, PAL_VLENGTH]];
+                        [palClockFrequency * PAL_HLENGTH, PAL_VLENGTH]];
   const palDisplayRect = [[HORIZ_START, VERT_PAL_START],
-			[HORIZ_DISPLAY, VERT_DISPLAY]];
+                        [HORIZ_DISPLAY, VERT_DISPLAY]];
   const palVertTotal = PAL_VTOTAL;
 
   const VERTEX_SHADER =`
@@ -208,7 +208,7 @@ void main(void)
 }
 `;
 
-  function buildTiming(clockFrequency, displayRect, visibleRect, vertTotal) {
+  function buildTiming(clockFrequency, displayRect, visibleRect, vertTotal, fsc) {
     const vertStart = displayRect[0][1];
     // Total number of CPU cycles per frame: 17030 for NTSC.
     const frameCycleNum = HORIZ_TOTAL * vertTotal;
@@ -216,7 +216,7 @@ void main(void)
     const horizStart = Math.floor(displayRect[0][0]);
     // imageSize is [14 * visible rect width in cells, visible lines]
     const imageSize = [Math.floor(CELL_WIDTH * visibleRect[1][0]),
-		     Math.floor(visibleRect[1][1])];
+                     Math.floor(visibleRect[1][1])];
     // imageLeft is # of pixels from first visible point to first displayed point.
     const imageLeft = Math.floor((horizStart-visibleRect[0][0]) * CELL_WIDTH);
     const colorBurst = [2 * Math.PI * (-33/360 + (imageLeft % 4) / 4)];
@@ -228,6 +228,7 @@ void main(void)
     const topLeft80Col = [imageLeft - CELL_WIDTH/2, vertStart - visibleRect[0][1]];
 
     return {
+      fsc: fsc,
       clockFrequency: clockFrequency,
       displayRect: displayRect,
       visibleRect: visibleRect,
@@ -311,11 +312,11 @@ void main(void)
       const vec = this.data;
       let sum = 0;
       for (const item of vec) {
-	sum += item;
+        sum += item;
       }
       const gain = 1/sum;
       for (const i in vec) {
-	vec[i] *= gain;
+        vec[i] *= gain;
       }
       return this;
     }
@@ -324,17 +325,17 @@ void main(void)
     mul(other) {
       const w = new Vector(0);
       if ((typeof other != "number") && (this.data.length != other.data.length)) {
-	return w;
+        return w;
       }
 
       w.data = new Float32Array(this.data);
 
       for (let i = 0; i < w.data.length; i++) {
-	if (typeof other == "number") {
-	  w.data[i] *= other;
-	} else {
-	  w.data[i] *= other.data[i];
-	}
+        if (typeof other == "number") {
+          w.data[i] *= other;
+        } else {
+          w.data[i] *= other.data[i];
+        }
       }
 
       return w;
@@ -344,15 +345,15 @@ void main(void)
       const size = this.data.length;
       const w = new Vector(size);
       for (let i = 0; i < size; i++) {
-	const omega = 2 * Math.PI * i / size;
+        const omega = 2 * Math.PI * i / size;
 
-	for (let j = 0; j < size; j++) {
-	  w.data[i] += this.data[j] * Math.cos(j * omega);
-	}
+        for (let j = 0; j < size; j++) {
+          w.data[i] += this.data[j] * Math.cos(j * omega);
+        }
       }
 
       for (let i = 0; i < size; i++) {
-	w.data[i] /= size;
+        w.data[i] /= size;
       }
 
       return w;
@@ -361,7 +362,7 @@ void main(void)
     resize(n) {
       const newData = new Float32Array(n);
       for (let i=0; i < Math.min(newData.length, this.data.length); i++) {
-	newData[i] = this.data[i];
+        newData[i] = this.data[i];
       }
       this.data = newData;
       return this;
@@ -378,11 +379,11 @@ void main(void)
 
       const alpha = Math.cosh(Math.acosh(Math.pow(10, sidelobeDb / 20)) / m);
       for (let i = 0; i < m; i++) {
-      	const a = Math.abs(alpha * Math.cos(Math.PI * i / m));
-      	if (a > 1)
-      	  w.data[i] = Math.pow(-1, i) * Math.cosh(m * Math.acosh(a));
-      	else
-      	  w.data[i] = Math.pow(-1, i) * Math.cos(m * Math.acos(a));
+        const a = Math.abs(alpha * Math.cos(Math.PI * i / m));
+        if (a > 1)
+          w.data[i] = Math.pow(-1, i) * Math.cosh(m * Math.acosh(a));
+        else
+          w.data[i] = Math.pow(-1, i) * Math.cos(m * Math.acos(a));
       }
 
       w = w.realIDFT();
@@ -393,7 +394,7 @@ void main(void)
 
       const max = w.data.reduce((prev, cur) => Math.max(prev, Math.abs(cur)));
       for (const i in w.data) {
-      	w.data[i] /= max;
+        w.data[i] /= max;
       }
 
       return w;
@@ -406,9 +407,9 @@ void main(void)
       const halfN = Math.floor(n / 2);
 
       for (let i = 0; i < n; i++) {
-	const x = 2 * Math.PI * fc * (i - halfN);
+        const x = 2 * Math.PI * fc * (i - halfN);
 
-	v.data[i] = (x == 0.0) ? 1.0 : Math.sin(x) / x;
+        v.data[i] = (x == 0.0) ? 1.0 : Math.sin(x) / x;
       }
 
       return v;
@@ -418,8 +419,8 @@ void main(void)
 
   const Matrix3 = class {
     constructor(c00, c01, c02,
-		c10, c11, c12,
-		c20, c21, c22) {
+                c10, c11, c12,
+                c20, c21, c22) {
       this.data = new Float32Array([c00, c01, c02, c10, c11, c12, c20, c21, c22]);
     }
 
@@ -430,15 +431,15 @@ void main(void)
     mul(val) {
       const m = new Matrix3(0,0,0,0,0,0,0,0,0);
       if (typeof val == "number") {
-	m.data = m.data.map(x => x * val);
+        m.data = this.data.map(x => x * val);
       } else {
-	for (let i = 0; i < 3; i++) {
-	  for (let j = 0; j < 3; j++) {
-	    for (let k = 0; k < 3; k++) {
-	      m.data[i * 3 + j] += val.data[i * 3 + k] * this.data[k * 3 + j];
-	    }
-	  }
-	}
+        for (let i = 0; i < 3; i++) {
+          for (let j = 0; j < 3; j++) {
+            for (let k = 0; k < 3; k++) {
+              m.data[i * 3 + j] += val.data[i * 3 + k] * this.data[k * 3 + j];
+            }
+          }
+        }
       }
       return m;
     }
@@ -446,12 +447,12 @@ void main(void)
 
   // https://codereview.stackexchange.com/a/128619
   const loadImage = path =>
-	new Promise((resolve, reject) => {
-	  const img = new Image();
-	  img.onload = () => resolve(img);
-	  img.onerror = () => reject(`error loading '${path}'`);
-	  img.src = path;
-	});
+        new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(`error loading '${path}'`);
+          img.src = path;
+        });
 
   // Given an image that's 560x192, render it into the larger space
   // required for NTSC or PAL.
@@ -461,7 +462,7 @@ void main(void)
   const screenData = (image, details) => {
     if ((image.naturalWidth != 560) || (image.naturalHeight != 192)) {
       throw new Error('screenData expects an image 560x192;' +
-		      ` got ${image.naturalWidth}x${image.naturalHeight}`);
+                      ` got ${image.naturalWidth}x${image.naturalHeight}`);
     }
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
@@ -472,8 +473,22 @@ void main(void)
     context.fillStyle = 'rgba(0,0,0,1)';
     context.fillRect(0, 0, width, height);
     context.drawImage(image, details.topLeft80Col[0], details.topLeft80Col[1]);
-    // const myData = context.getImageData(0, 0, image.naturalWidth, image.naturalHeight);
-    return canvas;
+    const imageData = context.getImageData(0, 0, width, height);
+    return [canvas, imageData];
+  };
+
+  // Given an ImageData (RGBA), convert to luminance by taking the max
+  // of (R,G,B) for each pixel. Return a Uint8Array.
+  const luminanceData = (imageData) => {
+    const width = imageData.width;
+    const height = imageData.height;
+    const data = imageData.data;
+    const size = width * height;
+    const ary = new Uint8Array(size);
+    for (let i = 0; i < size; i++) {
+      ary[i] = Math.max(data[i*4], data[i*4+1], data[i*4+2]);
+    }
+    return ary;
   };
 
   const TEXTURE_NAMES = [
@@ -566,17 +581,17 @@ void main(void)
       this.videoHue = 0;
       this.videoCenter = [0,0];
       this.videoSize = [1,1];
-      this.videoBandwidth = 14318180;
-      this.videoLumaBandwidth = 600000;
-      this.videoChromaBandwidth = 2000000;
+      this.videoBandwidth = 6000000; // 14318180;
+      this.videoLumaBandwidth = 2000000; // 600000;
+      this.videoChromaBandwidth = 600000; // 2000000;
       this.videoWhiteOnly = false;
 
       this.displayResolution = [640, 480];
       this.displayPixelDensity = 72;
-      this.displayBarrel = 0;
-      this.displayScanlineLevel = 0;
-      this.displayShadowMaskLevel = 0;
-      this.displayShadowMaskDotPitch = 1;
+      this.displayBarrel = 0.05; // 0;
+      this.displayScanlineLevel = 0.05; // 0;
+      this.displayShadowMaskLevel = 0.05; // 0;
+      this.displayShadowMaskDotPitch = 0.5; // 1;
       this.displayShadowMask = "SHADOWMASK_TRIAD";
       this.displayPersistence = 0;
       this.displayCenterLighting = 1;
@@ -589,12 +604,12 @@ void main(void)
   // image data.
   const ImageInfo = class {
     constructor(sampleRate, blackLevel, whiteLevel, subCarrier, colorBurst,
-		phaseAlternation, data) {
+                phaseAlternation, data) {
       if (typeof data != "object") {
-	throw new Error(`want typeof data == 'object'; got '${typeof data}'`);
+        throw new Error(`want typeof data == 'object'; got '${typeof data}'`);
       }
       if (!(data instanceof ImageData)) {
-	throw new Error(`want data instanceof ImageData; got '${data.constructor.name}'`);
+        throw new Error(`want data instanceof ImageData; got '${data.constructor.name}'`);
       }
       this.sampleRate = sampleRate;
       this.blackLevel = blackLevel;
@@ -623,7 +638,7 @@ void main(void)
       const gl = canvas.getContext("webgl");
       const float_texture_ext = gl.getExtension('OES_texture_float');
       if (float_texture_ext == null) {
-	throw new Error("WebGL extension 'OES_texture_float' unavailable");
+        throw new Error("WebGL extension 'OES_texture_float' unavailable");
       }
 
       this.canvas = canvas;
@@ -667,11 +682,11 @@ void main(void)
       this.textures = {};
 
       for (let name of TEXTURE_NAMES) {
-	this.textures[name] = new TextureInfo(0, 0, gl.createTexture());
+        this.textures[name] = new TextureInfo(0, 0, gl.createTexture());
       }
 
       for (let name of BUFFER_NAMES) {
-	this.buffers[name] = gl.createBuffer();
+        this.buffers[name] = gl.createBuffer();
       }
 
       await this.loadTextures();
@@ -686,11 +701,11 @@ void main(void)
       const gl = this.gl;
 
       for (let name of TEXTURE_NAMES) {
-	gl.deleteTexture(this.textures[name].glTexture);
+        gl.deleteTexture(this.textures[name].glTexture);
       }
 
       for (let name of BUFFER_NAMES) {
-	gl.deleteBuffer(this.buffers[name]);
+        gl.deleteBuffer(this.buffers[name]);
       }
 
       this.deleteShaders();
@@ -698,11 +713,11 @@ void main(void)
 
     loadTextures() {
       return Promise.all([
-	this.loadTexture("textures/Shadow Mask Triad.png", true, "SHADOWMASK_TRIAD"),
-	this.loadTexture("textures/Shadow Mask Inline.png", true, "SHADOWMASK_INLINE"),
-	this.loadTexture("textures/Shadow Mask Aperture.png", true, "SHADOWMASK_APERTURE"),
-	this.loadTexture("textures/Shadow Mask LCD.png", true, "SHADOWMASK_LCD"),
-	this.loadTexture("textures/Shadow Mask Bayer.png", true, "SHADOWMASK_BAYER"),
+        this.loadTexture("textures/Shadow Mask Triad.png", true, "SHADOWMASK_TRIAD"),
+        this.loadTexture("textures/Shadow Mask Inline.png", true, "SHADOWMASK_INLINE"),
+        this.loadTexture("textures/Shadow Mask Aperture.png", true, "SHADOWMASK_APERTURE"),
+        this.loadTexture("textures/Shadow Mask LCD.png", true, "SHADOWMASK_LCD"),
+        this.loadTexture("textures/Shadow Mask Bayer.png", true, "SHADOWMASK_BAYER"),
       ]);
     }
 
@@ -712,9 +727,9 @@ void main(void)
       const image = await loadImage(path);
       gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA,
-		    gl.RGBA, gl.UNSIGNED_BYTE, image);
+                    gl.RGBA, gl.UNSIGNED_BYTE, image);
       if (isMipMap) {
-	gl.generateMipmap(gl.TEXTURE_2D);
+        gl.generateMipmap(gl.TEXTURE_2D);
       }
 
       texInfo.width = image.naturalWidth;
@@ -738,10 +753,10 @@ void main(void)
 
     deleteShaders() {
       for (let name of SHADER_NAMES) {
-	if (this.shaders[name]) {
-	  this.gl.deleteProgram(this.shaders[name]);
-	  this.shaders[name] = false;
-	}
+        if (this.shaders[name]) {
+          this.gl.deleteProgram(this.shaders[name]);
+          this.shaders[name] = false;
+        }
       }
     }
 
@@ -753,27 +768,27 @@ void main(void)
 
       // if viewport size has changed:
       if ((this.viewportSize.width != canvasWidth)
-	  || (this.viewportSize.height != this.canvasHeight)) {
-	this.viewportSize = new Size(canvasWidth, canvasHeight);
-	gl.viewport(0, 0, canvasWidth, canvasHeight);
-	this.configurationChanged = true;
+          || (this.viewportSize.height != this.canvasHeight)) {
+        this.viewportSize = new Size(canvasWidth, canvasHeight);
+        gl.viewport(0, 0, canvasWidth, canvasHeight);
+        this.configurationChanged = true;
       }
 
       if (this.imageChanged) {
-	this.uploadImage();
+        this.uploadImage();
       }
 
       if (this.configurationChanged) {
-	this.configureShaders();
+        this.configureShaders();
       }
 
       if (this.imageChanged || this.configurationChanged) {
-	this.renderImage();
+        this.renderImage();
       }
 
       if (this.imageChanged || this.configurationChanged ||
-	  this.image.displayPersistence != 0) {
-	this.drawDisplayCanvas();
+          this.image.displayPersistence != 0) {
+        this.drawDisplayCanvas();
       }
     }
 
@@ -786,20 +801,23 @@ void main(void)
       gl.bindTexture(gl.TEXTURE_2D, texInfoImage.glTexture);
       const format = gl.LUMINANCE;
       const type = gl.UNSIGNED_BYTE;
+      const luminance = luminanceData(image.data);
       gl.texSubImage2D(gl.TEXTURE_2D, 0,
-      		       0, 0, // xoffset, yoffset
-      		       format, type, image.data);
+                       0, 0, // xoffset, yoffset
+                       image.data.width,
+                       image.data.height,
+                       format, type, luminance);
 
       // Update configuration
       if ((image.sampleRate != this.imageSampleRate) ||
           (image.blackLevel != this.imageBlackLevel) ||
           (image.whiteLevel != this.imageWhiteLevel) ||
-          (image.subcarrier != this.imageSubcarrier))
+          (image.subCarrier != this.imageSubcarrier))
       {
         this.imageSampleRate = image.sampleRate;
         this.imageBlackLevel = image.blackLevel;
         this.imageWhiteLevel = image.whiteLevel;
-        this.imageSubcarrier = image.subcarrier;
+        this.imageSubcarrier = image.subCarrier;
 
         this.configurationChanged = true;
       }
@@ -812,26 +830,26 @@ void main(void)
       const phaseInfo = new Float32Array(3 * texHeight);
 
       for (let x = 0; x < image.height; x++) {
-	const c = colorBurst[x % colorBurst.length] / 2 / Math.PI;
-	phaseInfo[3 * x + 0] = c - Math.floor(c);
-	phaseInfo[3 * x + 1] = phaseAlternation[x % phaseAlternation.length];
+        const c = colorBurst[x % colorBurst.length] / 2 / Math.PI;
+        phaseInfo[3 * x + 0] = c - Math.floor(c);
+        phaseInfo[3 * x + 1] = phaseAlternation[x % phaseAlternation.length];
       }
 
       const texInfoPhase = this.textures["IMAGE_PHASEINFO"];
       gl.bindTexture(gl.TEXTURE_2D, texInfoPhase.glTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, 1, texHeight, 0,
-		    gl.RGB, gl.FLOAT, phaseInfo);
+                    gl.RGB, gl.FLOAT, phaseInfo);
     }
 
     getRenderShader() {
       switch (this.display.videoDecoder) {
       case "CANVAS_RGB":
       case "CANVAS_MONOCHROME":
-	return [this.shaders["RGB"], "RGB"];
+        return [this.shaders["RGB"], "RGB"];
       case "CANVAS_YUV":
       case "CANVAS_YIQ":
       case "CANVAS_CXA2025AS":
-	return [this.shaders["COMPOSITE"], "COMPOSITE"];
+        return [this.shaders["COMPOSITE"], "COMPOSITE"];
       }
       return [null, null];
     }
@@ -843,7 +861,7 @@ void main(void)
       const displayShader = this.shaders["DISPLAY"];
 
       if (!renderShader || !displayShader)
-	return;
+        return;
 
       const isCompositeDecoder = (renderShaderName == "COMPOSITE");
 
@@ -852,8 +870,8 @@ void main(void)
 
       // Subcarrier
       if (isCompositeDecoder) {
-	gl.uniform1f(gl.getUniformLocation(renderShader, "subcarrier"),
-		     this.imageSubcarrier / this.imageSampleRate);
+        gl.uniform1f(gl.getUniformLocation(renderShader, "subcarrier"),
+                     this.imageSubcarrier / this.imageSampleRate);
       }
 
       // Filters
@@ -864,12 +882,12 @@ void main(void)
       const bandwidth = this.display.videoBandwidth / this.imageSampleRate;
 
       if (isCompositeDecoder) {
-	let yBandwidth = this.display.videoLumaBandwidth / this.imageSampleRate;
-	let uBandwidth = this.display.videoChromaBandwidth / this.imageSampleRate;
-	let vBandwidth = uBandwidth;
+        let yBandwidth = this.display.videoLumaBandwidth / this.imageSampleRate;
+        let uBandwidth = this.display.videoChromaBandwidth / this.imageSampleRate;
+        let vBandwidth = uBandwidth;
 
-	if (this.display.videoDecoder == "CANVAS_YIQ")
-	  uBandwidth = uBandwidth + NTSC_IQ_DELTA / this.imageSampleRate;
+        if (this.display.videoDecoder == "CANVAS_YIQ")
+          uBandwidth = uBandwidth + NTSC_IQ_DELTA / this.imageSampleRate;
 
         // Switch to video bandwidth when no subcarrier
         if ((this.imageSubcarrier == 0.0) || this.display.videoWhiteOnly)
@@ -893,28 +911,28 @@ void main(void)
       }
 
       gl.uniform3f(gl.getUniformLocation(renderShader, "c0"),
-		   wy.data[8], wu.data[8], wv.data[8]);
+                   wy.data[8], wu.data[8], wv.data[8]);
       gl.uniform3f(gl.getUniformLocation(renderShader, "c1"),
-		   wy.data[7], wu.data[7], wv.data[7]);
+                   wy.data[7], wu.data[7], wv.data[7]);
       gl.uniform3f(gl.getUniformLocation(renderShader, "c2"),
-		   wy.data[6], wu.data[6], wv.data[6]);
+                   wy.data[6], wu.data[6], wv.data[6]);
       gl.uniform3f(gl.getUniformLocation(renderShader, "c3"),
-		   wy.data[5], wu.data[5], wv.data[5]);
+                   wy.data[5], wu.data[5], wv.data[5]);
       gl.uniform3f(gl.getUniformLocation(renderShader, "c4"),
-		   wy.data[4], wu.data[4], wv.data[4]);
+                   wy.data[4], wu.data[4], wv.data[4]);
       gl.uniform3f(gl.getUniformLocation(renderShader, "c5"),
-		   wy.data[3], wu.data[3], wv.data[3]);
+                   wy.data[3], wu.data[3], wv.data[3]);
       gl.uniform3f(gl.getUniformLocation(renderShader, "c6"),
-		   wy.data[2], wu.data[2], wv.data[2]);
+                   wy.data[2], wu.data[2], wv.data[2]);
       gl.uniform3f(gl.getUniformLocation(renderShader, "c7"),
-		   wy.data[1], wu.data[1], wv.data[1]);
+                   wy.data[1], wu.data[1], wv.data[1]);
       gl.uniform3f(gl.getUniformLocation(renderShader, "c8"),
-		   wy.data[0], wu.data[0], wv.data[0]);
+                   wy.data[0], wu.data[0], wv.data[0]);
 
       // Decoder matrix
       let decoderMatrix = new Matrix3(1, 0, 0,
-				      0, 1, 0,
-				      0, 0, 1);
+                                      0, 1, 0,
+                                      0, 0, 1);
 
       // Encode
       if (!isCompositeDecoder) {
@@ -942,15 +960,15 @@ void main(void)
 
       // Saturation
       decoderMatrix = new Matrix3(1, 0, 0,
-				  0, this.display.videoSaturation, 0,
-				  0, 0, this.display.videoSaturation).mul(decoderMatrix);
+                                  0, this.display.videoSaturation, 0,
+                                  0, 0, this.display.videoSaturation).mul(decoderMatrix);
 
       // Hue
       const hue = 2 * Math.PI * this.display.videoHue;
 
       decoderMatrix = new Matrix3(1, 0, 0,
-				  0, Math.cos(hue), -Math.sin(hue),
-				  0, Math.sin(hue), Math.cos(hue)).mul(decoderMatrix);
+                                  0, Math.cos(hue), -Math.sin(hue),
+                                  0, Math.sin(hue), Math.cos(hue)).mul(decoderMatrix);
 
       // Decode
       switch (this.display.videoDecoder) {
@@ -988,7 +1006,7 @@ void main(void)
                                     0.317, -0.466, 1.677).mul(decoderMatrix);
         break;
       default:
-	throw new Error(`unknown videoDecoder: ${this.display.videoDecoder}`);
+        throw new Error(`unknown videoDecoder: ${this.display.videoDecoder}`);
       }
 
       // Brightness
@@ -1024,7 +1042,7 @@ void main(void)
       decoderMatrix = decoderMatrix.mul(contrast);
 
       gl.uniformMatrix3fv(gl.getUniformLocation(renderShader, "decoderMatrix"),
-			  false, decoderMatrix.data);
+                          false, decoderMatrix.data);
 
       // Display shader
       gl.useProgram(displayShader);
@@ -1064,7 +1082,7 @@ void main(void)
       const gl = this.gl;
       const [renderShader, renderShaderName] = this.getRenderShader();
       if (!renderShader || !this.shaderEnabled)
-	return;
+        return;
 
       const isCompositeDecoder = (renderShaderName == "COMPOSITE");
 
@@ -1105,7 +1123,7 @@ void main(void)
       const imageSize = this.image.size;
 
       for (let y = 0; y < this.image.height; y += this.viewportSize.height) {
-	for (let x = 0; x < this.image.width; x += this.viewportSize.width) {
+        for (let x = 0; x < this.image.width; x += this.viewportSize.width) {
           // Calculate rects
           const clipSize = this.viewportSize.copy();
 
@@ -1128,54 +1146,54 @@ void main(void)
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
-	  // What is this, some ancient fixed pipeline nonsense? No way.
+          // What is this, some ancient fixed pipeline nonsense? No way.
           // glLoadIdentity();
 
-	  const positionLocation = gl.getAttribLocation(renderShader, "a_position");
-	  const texcoordLocation = gl.getAttribLocation(renderShader, "a_texCoord");
-	  const positionBuffer = this.buffers["POSITION"];
-	  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-	  const p_x1 = canvasRect.l;
-	  const p_x2 = canvasRect.r;
-	  const p_y1 = canvasRect.t;
-	  const p_y2 = canvasRect.b;
-	  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-	    p_x1, p_y1,
-	    p_x2, p_y1,
-	    p_x1, p_y2,
-	    p_x1, p_y2,
-	    p_x2, p_y1,
-	    p_x2, p_y2,
-	  ]), gl.STATIC_DRAW);
+          const positionLocation = gl.getAttribLocation(renderShader, "a_position");
+          const texcoordLocation = gl.getAttribLocation(renderShader, "a_texCoord");
+          const positionBuffer = this.buffers["POSITION"];
+          gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+          const p_x1 = canvasRect.l;
+          const p_x2 = canvasRect.r;
+          const p_y1 = canvasRect.t;
+          const p_y2 = canvasRect.b;
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            p_x1, p_y1,
+            p_x2, p_y1,
+            p_x1, p_y2,
+            p_x1, p_y2,
+            p_x2, p_y1,
+            p_x2, p_y2,
+          ]), gl.STATIC_DRAW);
 
-	  const texcoordBuffer = this.buffers["TEXCOORD"];
-	  gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-	  const t_x1 = textureRect.l;
-	  const t_x2 = textureRect.r;
-	  const t_y1 = textureRect.t;
-	  const t_y2 = textureRect.b;
-	  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-	    t_x1, t_y1,
-	    t_x2, t_y1,
-	    t_x1, t_y2,
-	    t_x1, t_y2,
-	    t_x2, t_y1,
-	    t_x2, t_y2,
-	  ]), gl.STATIC_DRAW);
+          const texcoordBuffer = this.buffers["TEXCOORD"];
+          gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+          const t_x1 = textureRect.l;
+          const t_x2 = textureRect.r;
+          const t_y1 = textureRect.t;
+          const t_y2 = textureRect.b;
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            t_x1, t_y1,
+            t_x2, t_y1,
+            t_x1, t_y2,
+            t_x1, t_y2,
+            t_x2, t_y1,
+            t_x2, t_y2,
+          ]), gl.STATIC_DRAW);
 
-	  gl.clearColor(0, 0, 0, 0);
-	  gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.clearColor(0, 0, 0, 0);
+          gl.clear(gl.COLOR_BUFFER_BIT);
 
-	  gl.enableVertexAttribArray(positionLocation);
-	  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-	  gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+          gl.enableVertexAttribArray(positionLocation);
+          gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+          gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-	  gl.enableVertexAttribArray(texcoordLocation);
-	  gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-	  gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+          gl.enableVertexAttribArray(texcoordLocation);
+          gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+          gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
 
-	  gl.drawArrays(gl.TRIANGLES, 0, 6);
-	}
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
       }
 
 
@@ -1193,19 +1211,19 @@ void main(void)
       const gl = this.gl;
       const texInfo = this.textures[name];
       if (!texInfo) {
-	throw new Error(`Cannot find texture named ${name}`);
+        throw new Error(`Cannot find texture named ${name}`);
       }
       if (width < 4) width = 4;
       if (height < 4) height = 4;
       width = 2**Math.ceil(Math.log2(width));
       height = 2**Math.ceil(Math.log2(height));
       if (texInfo.width != width || texInfo.height != height) {
-	texInfo.width = width;
-	texInfo.height = height;
-	gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
-	const dummy = new Uint8Array(width * height);
-	gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0,
-		      gl.LUMINANCE, gl.UNSIGNED_BYTE, dummy);
+        texInfo.width = width;
+        texInfo.height = height;
+        gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
+        const dummy = new Uint8Array(width * height);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, width, height, 0,
+                      gl.LUMINANCE, gl.UNSIGNED_BYTE, dummy);
       }
     }
   }
@@ -1227,9 +1245,9 @@ void main(void)
       NTSC_Q_CUTOFF: NTSC_Q_CUTOFF,
       NTSC_IQ_DELTA: NTSC_IQ_DELTA,
       NTSC_DETAILS: buildTiming(ntscClockFrequency, ntscDisplayRect,
-				ntscVisibleRect, ntscVertTotal),
+                                ntscVisibleRect, ntscVertTotal, NTSC_FSC),
       PAL_DETAILS: buildTiming(palClockFrequency, palDisplayRect,
-			       palVisibleRect, palVertTotal),
+                               palVisibleRect, palVertTotal, PAL_FSC),
     },
     loadImage: loadImage,
     screenData: screenData,
