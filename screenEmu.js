@@ -1,249 +1,8 @@
 "use strict";
 
 const screenEmu = (function () {
-  // From AppleIIVideo.cpp
 
-  const HORIZ_START = 16;
-  const HORIZ_BLANK = (9 + HORIZ_START) // 25;
-  const HORIZ_DISPLAY = 40;
-  const HORIZ_TOTAL = (HORIZ_BLANK + HORIZ_DISPLAY) // 65;
-
-  const CELL_WIDTH = 14;
-  const CELL_HEIGHT = 8;
-
-  const VERT_NTSC_START = 38;
-  const VERT_PAL_START = 48;
-  const VERT_DISPLAY = 192;
-
-  const BLOCK_WIDTH = HORIZ_DISPLAY; // 40
-  const BLOCK_HEIGHT = (VERT_DISPLAY / CELL_HEIGHT); // 24
-
-  // From CanvasInterface.h
-
-  const NTSC_FSC     = 315/88 * 1e6;         // 3579545 = 3.5 Mhz: Color Subcarrier
-  const NTSC_4FSC    = 4 * NTSC_FSC;         // 14318180 = 14.3 Mhz
-  const NTSC_HTOTAL  = (63+5/9) * 1e-6;
-  const NTSC_HLENGTH = (52+8/9) * 1e-6;
-  const NTSC_HHALF   = (35+2/3) * 1e-6;
-  const NTSC_HSTART  = NTSC_HHALF - NTSC_HLENGTH/2;
-  const NTSC_HEND    = NTSC_HHALF + NTSC_HLENGTH/2;
-  const NTSC_VTOTAL  = 262;
-  const NTSC_VLENGTH = 240;
-  const NTSC_VSTART  = 19;
-  const NTSC_VEND    = NTSC_VSTART + NTSC_VLENGTH;
-
-  const PAL_FSC      = 4433618.75; // Color subcarrier
-  const PAL_4FSC     = 4 * PAL_FSC;
-  const PAL_HTOTAL   = 64e-6;
-  const PAL_HLENGTH  = 52e-6;
-  const PAL_HHALF    = (37+10/27) * 1e-6;
-  const PAL_HSTART   = PAL_HHALF - PAL_HLENGTH / 2;
-  const PAL_HEND     = PAL_HHALF + PAL_HLENGTH / 2;
-  const PAL_VTOTAL   = 312;
-  const PAL_VLENGTH  = 288;
-  const PAL_VSTART   = 21;
-  const PAL_VEND     = PAL_VSTART + PAL_VLENGTH;
-
-  // From OpenGLCanvas.cpp
-  const NTSC_I_CUTOFF = 1300000;
-  const NTSC_Q_CUTOFF = 600000;
-  const NTSC_IQ_DELTA = NTSC_I_CUTOFF - NTSC_Q_CUTOFF;
-
-  // From AppleIIVideo::updateTiming
-  const ntscClockFrequency = NTSC_4FSC * HORIZ_TOTAL / 912;
-  const ntscVisibleRect = [[ntscClockFrequency * NTSC_HSTART, NTSC_VSTART],
-                         [ntscClockFrequency * NTSC_HLENGTH, NTSC_VLENGTH]];
-  const ntscDisplayRect = [[HORIZ_START, VERT_NTSC_START],
-                         [HORIZ_DISPLAY, VERT_DISPLAY]];
-  const ntscVertTotal = NTSC_VTOTAL;
-
-  const palClockFrequency = 14250450.0 * HORIZ_TOTAL / 912;
-  const palVisibleRect = [[palClockFrequency * PAL_HSTART, PAL_VSTART],
-                        [palClockFrequency * PAL_HLENGTH, PAL_VLENGTH]];
-  const palDisplayRect = [[HORIZ_START, VERT_PAL_START],
-                        [HORIZ_DISPLAY, VERT_DISPLAY]];
-  const palVertTotal = PAL_VTOTAL;
-
-  const VERTEX_SHADER =`
-// an attribute will receive data from a buffer
-attribute vec4 a_position;
-attribute vec2 a_texCoord;
-varying vec2 v_texCoord;
-
-// all shaders have a main function
-void main() {
-  // gl_Position is a special variable a vertex shader
-  // is responsible for setting
-  gl_Position = a_position;
-  v_texCoord = a_texCoord;
-}
-`;
-
-  const COMPOSITE_SHADER = `
-precision mediump float;
-
-varying vec2 v_texCoord;
-
-uniform sampler2D texture;
-uniform vec2 textureSize;
-uniform float subcarrier;
-uniform sampler2D phaseInfo;
-uniform vec3 c0, c1, c2, c3, c4, c5, c6, c7, c8;
-uniform mat3 decoderMatrix;
-uniform vec3 decoderOffset;
-
-float PI = 3.14159265358979323846264;
-
-vec3 pixel(in vec2 q)
-{
-  vec3 c = texture2D(texture, q).rgb;
-  vec2 p = texture2D(phaseInfo, vec2(0, q.y)).rg;
-  float phase = 2.0 * PI * (subcarrier * textureSize.x * q.x + p.x);
-  return c * vec3(1.0, sin(phase), (1.0 - 2.0 * p.y) * cos(phase));
-}
-
-vec3 pixels(vec2 q, float i)
-{
-  return pixel(vec2(q.x + i, q.y)) + pixel(vec2(q.x - i, q.y));
-}
-
-void main(void)
-{
-  vec2 q = v_texCoord;
-  vec3 c = pixel(q) * c0;
-  c += pixels(q, 1.0 / textureSize.x) * c1;
-  c += pixels(q, 2.0 / textureSize.x) * c2;
-  c += pixels(q, 3.0 / textureSize.x) * c3;
-  c += pixels(q, 4.0 / textureSize.x) * c4;
-  c += pixels(q, 5.0 / textureSize.x) * c5;
-  c += pixels(q, 6.0 / textureSize.x) * c6;
-  c += pixels(q, 7.0 / textureSize.x) * c7;
-  c += pixels(q, 8.0 / textureSize.x) * c8;
-  gl_FragColor = vec4(decoderMatrix * c + decoderOffset, 1.0);
-}
-`;
-
-  const DISPLAY_SHADER = `
-precision mediump float;
-
-varying vec2 v_texCoord;
-
-uniform sampler2D texture;
-uniform vec2 textureSize;
-uniform float barrel;
-uniform vec2 barrelSize;
-uniform float scanlineLevel;
-uniform sampler2D shadowMask;
-uniform vec2 shadowMaskSize;
-uniform float shadowMaskLevel;
-uniform float centerLighting;
-uniform sampler2D persistence;
-uniform vec2 persistenceSize;
-uniform vec2 persistenceOrigin;
-uniform float persistenceLevel;
-uniform float luminanceGain;
-
-float PI = 3.14159265358979323846264;
-
-void main(void)
-{
-  vec2 qc = (v_texCoord - vec2(0.5, 0.5)) * barrelSize;
-  vec2 qb = barrel * qc * dot(qc, qc);
-  vec2 q = v_texCoord + qb;
-
-  vec3 c = texture2D(texture, q).rgb;
-
-  float scanline = sin(PI * textureSize.y * q.y);
-  c *= mix(1.0, scanline * scanline, scanlineLevel);
-
-  vec3 mask = texture2D(shadowMask, (v_texCoord + qb) * shadowMaskSize).rgb;
-  c *= mix(vec3(1.0, 1.0, 1.0), mask, shadowMaskLevel);
-
-  vec2 lighting = qc * centerLighting;
-  c *= exp(-dot(lighting, lighting));
-
-  c *= luminanceGain;
-
-  vec2 qp = v_texCoord * persistenceSize + persistenceOrigin;
-  c = max(c, texture2D(persistence, qp).rgb * persistenceLevel - 0.5 / 256.0);
-
-  gl_FragColor = vec4(c, 1.0);
-}
-`;
-
-  const RGB_SHADER = `
-precision mediump float;
-
-varying vec2 v_texCoord;
-
-uniform sampler2D texture;
-uniform vec2 textureSize;
-uniform vec3 c0, c1, c2, c3, c4, c5, c6, c7, c8;
-uniform mat3 decoderMatrix;
-uniform vec3 decoderOffset;
-
-vec3 pixel(vec2 q)
-{
-  return texture2D(texture, q).rgb;
-}
-
-vec3 pixels(in vec2 q, in float i)
-{
-  return pixel(vec2(q.x + i, q.y)) + pixel(vec2(q.x - i, q.y));
-}
-
-void main(void)
-{
-  vec2 q = v_texCoord;
-  vec3 c = pixel(q) * c0;
-  c += pixels(q, 1.0 / textureSize.x) * c1;
-  c += pixels(q, 2.0 / textureSize.x) * c2;
-  c += pixels(q, 3.0 / textureSize.x) * c3;
-  c += pixels(q, 4.0 / textureSize.x) * c4;
-  c += pixels(q, 5.0 / textureSize.x) * c5;
-  c += pixels(q, 6.0 / textureSize.x) * c6;
-  c += pixels(q, 7.0 / textureSize.x) * c7;
-  c += pixels(q, 8.0 / textureSize.x) * c8;
-  gl_FragColor = vec4(decoderMatrix * c + decoderOffset, 1.0);
-}
-`;
-
-  function buildTiming(clockFrequency, displayRect, visibleRect, vertTotal, fsc) {
-    const vertStart = displayRect[0][1];
-    // Total number of CPU cycles per frame: 17030 for NTSC.
-    const frameCycleNum = HORIZ_TOTAL * vertTotal;
-    // first displayed column.
-    const horizStart = Math.floor(displayRect[0][0]);
-    // imageSize is [14 * visible rect width in cells, visible lines]
-    const imageSize = [Math.floor(CELL_WIDTH * visibleRect[1][0]),
-                     Math.floor(visibleRect[1][1])];
-    // imageLeft is # of pixels from first visible point to first displayed point.
-    const imageLeft = Math.floor((horizStart-visibleRect[0][0]) * CELL_WIDTH);
-    const colorBurst = [2 * Math.PI * (-33/360 + (imageLeft % 4) / 4)];
-    const cycleNum = frameCycleNum + 16;
-
-    // First pixel that OpenEmulator draws when painting normally.
-    const topLeft = [imageLeft, vertStart - visibleRect[0][1]];
-    // First pixel that OpenEmulator draws when painting 80-column mode.
-    const topLeft80Col = [imageLeft - CELL_WIDTH/2, vertStart - visibleRect[0][1]];
-
-    return {
-      fsc: fsc,
-      clockFrequency: clockFrequency,
-      displayRect: displayRect,
-      visibleRect: visibleRect,
-      vertStart: vertStart,
-      vertTotal: vertTotal,
-      frameCycleNum: frameCycleNum,
-      horizStart: horizStart,
-      imageSize: imageSize,
-      imageLeft: imageLeft,
-      colorBurst: colorBurst,
-      cycleNum: cycleNum,
-      topLeft: topLeft,
-      topLeft80Col: topLeft80Col,
-    };
-  }
+  // Classes
 
   const Point = class {
     constructor(x, y) {
@@ -260,6 +19,10 @@ void main(void)
 
     copy() {
       return new Size(this.width, this.height);
+    }
+
+    get ratio() {
+      return this.width / this.height;
     }
   }
 
@@ -445,6 +208,256 @@ void main(void)
     }
   }
 
+
+  // From AppleIIVideo.cpp
+
+  const HORIZ_START = 16;
+  const HORIZ_BLANK = (9 + HORIZ_START) // 25;
+  const HORIZ_DISPLAY = 40;
+  const HORIZ_TOTAL = (HORIZ_BLANK + HORIZ_DISPLAY) // 65;
+
+  const CELL_WIDTH = 14;
+  const CELL_HEIGHT = 8;
+
+  const VERT_NTSC_START = 38;
+  const VERT_PAL_START = 48;
+  const VERT_DISPLAY = 192;
+
+  const BLOCK_WIDTH = HORIZ_DISPLAY; // 40
+  const BLOCK_HEIGHT = (VERT_DISPLAY / CELL_HEIGHT); // 24
+
+  // From CanvasInterface.h
+
+  const NTSC_FSC     = 315/88 * 1e6;         // 3579545 = 3.5 Mhz: Color Subcarrier
+  const NTSC_4FSC    = 4 * NTSC_FSC;         // 14318180 = 14.3 Mhz
+  const NTSC_HTOTAL  = (63+5/9) * 1e-6;
+  const NTSC_HLENGTH = (52+8/9) * 1e-6;
+  const NTSC_HHALF   = (35+2/3) * 1e-6;
+  const NTSC_HSTART  = NTSC_HHALF - NTSC_HLENGTH/2;
+  const NTSC_HEND    = NTSC_HHALF + NTSC_HLENGTH/2;
+  const NTSC_VTOTAL  = 262;
+  const NTSC_VLENGTH = 240;
+  const NTSC_VSTART  = 19;
+  const NTSC_VEND    = NTSC_VSTART + NTSC_VLENGTH;
+
+  const PAL_FSC      = 4433618.75; // Color subcarrier
+  const PAL_4FSC     = 4 * PAL_FSC;
+  const PAL_HTOTAL   = 64e-6;
+  const PAL_HLENGTH  = 52e-6;
+  const PAL_HHALF    = (37+10/27) * 1e-6;
+  const PAL_HSTART   = PAL_HHALF - PAL_HLENGTH / 2;
+  const PAL_HEND     = PAL_HHALF + PAL_HLENGTH / 2;
+  const PAL_VTOTAL   = 312;
+  const PAL_VLENGTH  = 288;
+  const PAL_VSTART   = 21;
+  const PAL_VEND     = PAL_VSTART + PAL_VLENGTH;
+
+  // From OpenGLCanvas.cpp
+  const NTSC_I_CUTOFF = 1300000;
+  const NTSC_Q_CUTOFF = 600000;
+  const NTSC_IQ_DELTA = NTSC_I_CUTOFF - NTSC_Q_CUTOFF;
+
+  // From AppleIIVideo::updateTiming
+  const ntscClockFrequency = NTSC_4FSC * HORIZ_TOTAL / 912;
+  const ntscVisibleRect = new Rect(ntscClockFrequency * NTSC_HSTART, NTSC_VSTART,
+				   ntscClockFrequency * NTSC_HLENGTH, NTSC_VLENGTH);
+  const ntscDisplayRect = new Rect(HORIZ_START, VERT_NTSC_START,
+				   HORIZ_DISPLAY, VERT_DISPLAY);
+  const ntscVertTotal = NTSC_VTOTAL;
+
+  const palClockFrequency = 14250450.0 * HORIZ_TOTAL / 912;
+  const palVisibleRect = new Rect(palClockFrequency * PAL_HSTART, PAL_VSTART,
+				  palClockFrequency * PAL_HLENGTH, PAL_VLENGTH);
+  const palDisplayRect = new Rect(HORIZ_START, VERT_PAL_START,
+				  HORIZ_DISPLAY, VERT_DISPLAY);
+  const palVertTotal = PAL_VTOTAL;
+
+  const VERTEX_SHADER =`
+// an attribute will receive data from a buffer
+attribute vec4 a_position;
+attribute vec2 a_texCoord;
+varying vec2 v_texCoord;
+
+// all shaders have a main function
+void main() {
+  // gl_Position is a special variable a vertex shader
+  // is responsible for setting
+  gl_Position = a_position;
+  v_texCoord = a_texCoord;
+}
+`;
+
+  const COMPOSITE_SHADER = `
+precision mediump float;
+
+varying vec2 v_texCoord;
+
+uniform sampler2D texture;
+uniform vec2 textureSize;
+uniform float subcarrier;
+uniform sampler2D phaseInfo;
+uniform vec3 c0, c1, c2, c3, c4, c5, c6, c7, c8;
+uniform mat3 decoderMatrix;
+uniform vec3 decoderOffset;
+
+float PI = 3.14159265358979323846264;
+
+vec3 pixel(in vec2 q)
+{
+  vec3 c = texture2D(texture, q).rgb;
+  vec2 p = texture2D(phaseInfo, vec2(0, q.y)).rg;
+  float phase = 2.0 * PI * (subcarrier * textureSize.x * q.x + p.x);
+  return c * vec3(1.0, sin(phase), (1.0 - 2.0 * p.y) * cos(phase));
+}
+
+vec3 pixels(vec2 q, float i)
+{
+  return pixel(vec2(q.x + i, q.y)) + pixel(vec2(q.x - i, q.y));
+}
+
+void main(void)
+{
+  vec2 q = v_texCoord;
+  vec3 c = pixel(q) * c0;
+  c += pixels(q, 1.0 / textureSize.x) * c1;
+  c += pixels(q, 2.0 / textureSize.x) * c2;
+  c += pixels(q, 3.0 / textureSize.x) * c3;
+  c += pixels(q, 4.0 / textureSize.x) * c4;
+  c += pixels(q, 5.0 / textureSize.x) * c5;
+  c += pixels(q, 6.0 / textureSize.x) * c6;
+  c += pixels(q, 7.0 / textureSize.x) * c7;
+  c += pixels(q, 8.0 / textureSize.x) * c8;
+  gl_FragColor = vec4(decoderMatrix * c + decoderOffset, 1.0);
+}
+`;
+
+  const DISPLAY_SHADER = `
+precision mediump float;
+
+varying vec2 v_texCoord;
+
+uniform sampler2D texture;
+uniform vec2 textureSize;
+uniform float barrel;
+uniform vec2 barrelSize;
+uniform float scanlineLevel;
+uniform sampler2D shadowMask;
+uniform vec2 shadowMaskSize;
+uniform float shadowMaskLevel;
+uniform float centerLighting;
+uniform sampler2D persistence;
+uniform vec2 persistenceSize;
+uniform vec2 persistenceOrigin;
+uniform float persistenceLevel;
+uniform float luminanceGain;
+
+float PI = 3.14159265358979323846264;
+
+void main(void)
+{
+  vec2 qc = (v_texCoord - vec2(0.5, 0.5)) * barrelSize;
+  vec2 qb = barrel * qc * dot(qc, qc);
+  vec2 q = v_texCoord + qb;
+
+  vec3 c = texture2D(texture, q).rgb;
+
+  float scanline = sin(PI * textureSize.y * q.y);
+  c *= mix(1.0, scanline * scanline, scanlineLevel);
+
+  vec3 mask = texture2D(shadowMask, (v_texCoord + qb) * shadowMaskSize).rgb;
+  c *= mix(vec3(1.0, 1.0, 1.0), mask, shadowMaskLevel);
+
+  vec2 lighting = qc * centerLighting;
+  c *= exp(-dot(lighting, lighting));
+
+  c *= luminanceGain;
+
+  vec2 qp = v_texCoord * persistenceSize + persistenceOrigin;
+  c = max(c, texture2D(persistence, qp).rgb * persistenceLevel - 0.5 / 256.0);
+
+  gl_FragColor = vec4(c, 1.0);
+}
+`;
+
+  const RGB_SHADER = `
+precision mediump float;
+
+varying vec2 v_texCoord;
+
+uniform sampler2D texture;
+uniform vec2 textureSize;
+uniform vec3 c0, c1, c2, c3, c4, c5, c6, c7, c8;
+uniform mat3 decoderMatrix;
+uniform vec3 decoderOffset;
+
+vec3 pixel(vec2 q)
+{
+  return texture2D(texture, q).rgb;
+}
+
+vec3 pixels(in vec2 q, in float i)
+{
+  return pixel(vec2(q.x + i, q.y)) + pixel(vec2(q.x - i, q.y));
+}
+
+void main(void)
+{
+  vec2 q = v_texCoord;
+  vec3 c = pixel(q) * c0;
+  c += pixels(q, 1.0 / textureSize.x) * c1;
+  c += pixels(q, 2.0 / textureSize.x) * c2;
+  c += pixels(q, 3.0 / textureSize.x) * c3;
+  c += pixels(q, 4.0 / textureSize.x) * c4;
+  c += pixels(q, 5.0 / textureSize.x) * c5;
+  c += pixels(q, 6.0 / textureSize.x) * c6;
+  c += pixels(q, 7.0 / textureSize.x) * c7;
+  c += pixels(q, 8.0 / textureSize.x) * c8;
+  gl_FragColor = vec4(decoderMatrix * c + decoderOffset, 1.0);
+}
+`;
+
+  function buildTiming(clockFrequency, displayRect, visibleRect, vertTotal, fsc) {
+    const vertStart = displayRect.y;
+    // Total number of CPU cycles per frame: 17030 for NTSC.
+    const frameCycleNum = HORIZ_TOTAL * vertTotal;
+    // first displayed column.
+    const horizStart = Math.floor(displayRect.x);
+    // imageSize is [14 * visible rect width in cells, visible lines]
+    const imageSize = new Size(Math.floor(CELL_WIDTH * visibleRect.width),
+			       Math.floor(visibleRect.height));
+    // imageLeft is # of pixels from first visible point to first displayed point.
+    const imageLeft = Math.floor((horizStart-visibleRect.x) * CELL_WIDTH);
+    const colorBurst = [2 * Math.PI * (-33/360 + (imageLeft % 4) / 4)];
+    const cycleNum = frameCycleNum + 16;
+
+    // First pixel that OpenEmulator draws when painting normally.
+    const topLeft = new Point(imageLeft, vertStart - visibleRect.y);
+    // First pixel that OpenEmulator draws when painting 80-column mode.
+    const topLeft80Col = new Point(imageLeft - CELL_WIDTH/2, vertStart - visibleRect.y);
+
+    return {
+      fsc: fsc,
+      clockFrequency: clockFrequency,
+      displayRect: displayRect,
+      visibleRect: visibleRect,
+      vertStart: vertStart,
+      vertTotal: vertTotal,
+      frameCycleNum: frameCycleNum,
+      horizStart: horizStart,
+      imageSize: imageSize,
+      imageLeft: imageLeft,
+      colorBurst: colorBurst,
+      cycleNum: cycleNum,
+      topLeft: topLeft,
+      topLeft80Col: topLeft80Col,
+    };
+  }
+
+  const NTSC_DETAILS = buildTiming(ntscClockFrequency, ntscDisplayRect,
+                                   ntscVisibleRect, ntscVertTotal, NTSC_FSC);
+  const PAL_DETAILS = buildTiming(palClockFrequency, palDisplayRect,
+				  palVisibleRect, palVertTotal, PAL_FSC);
+
   // https://codereview.stackexchange.com/a/128619
   const loadImage = path =>
         new Promise((resolve, reject) => {
@@ -466,13 +479,13 @@ void main(void)
     }
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
-    const width = details.imageSize[0];
-    const height = details.imageSize[1];
+    const width = details.imageSize.width;
+    const height = details.imageSize.height;
     canvas.width = width;
     canvas.height = height;
     context.fillStyle = 'rgba(0,0,0,1)';
     context.fillRect(0, 0, width, height);
-    context.drawImage(image, details.topLeft80Col[0], details.topLeft80Col[1]);
+    context.drawImage(image, details.topLeft80Col.x, details.topLeft80Col.y);
     const imageData = context.getImageData(0, 0, width, height);
     return [canvas, imageData];
   };
@@ -579,14 +592,14 @@ void main(void)
       this.videoContrast = 1;
       this.videoSaturation = 1;
       this.videoHue = 0;
-      this.videoCenter = [0,0];
-      this.videoSize = [1,1];
+      this.videoCenter = new Point(0, 0);
+      this.videoSize = new Size(1.05, 1.05);
       this.videoBandwidth = 6000000; // 14318180;
       this.videoLumaBandwidth = 2000000; // 600000;
       this.videoChromaBandwidth = 600000; // 2000000;
       this.videoWhiteOnly = false;
 
-      this.displayResolution = [640, 480];
+      this.displayResolution = new Size(640, 480);
       this.displayPixelDensity = 72;
       this.displayBarrel = 0.05; // 0;
       this.displayScanlineLevel = 0.05; // 0;
@@ -603,20 +616,21 @@ void main(void)
   // image. The `data` field is an ImageData object with the actual
   // image data.
   const ImageInfo = class {
-    constructor(sampleRate, blackLevel, whiteLevel, subCarrier, colorBurst,
-                phaseAlternation, data) {
+    constructor(data) {
       if (typeof data != "object") {
         throw new Error(`want typeof data == 'object'; got '${typeof data}'`);
       }
       if (!(data instanceof ImageData)) {
         throw new Error(`want data instanceof ImageData; got '${data.constructor.name}'`);
       }
-      this.sampleRate = sampleRate;
-      this.blackLevel = blackLevel;
-      this.whiteLevel = whiteLevel;
-      this.subCarrier = subCarrier;
-      this.colorBurst = colorBurst;
-      this.phaseAlternation = phaseAlternation;
+
+      this.sampleRate = NTSC_4FSC;
+      this.blackLevel = 0;
+      this.whiteLevel = 1;
+      this.interlace = 0;
+      this.subCarrier = NTSC_FSC;
+      this.colorBurst = NTSC_DETAILS.colorBurst;
+      this.phaseAlternation = [false];
       this.data = data;
     }
 
@@ -1193,15 +1207,94 @@ void main(void)
           gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
 
           gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+	  // Copy framebuffer
+	  gl.bindTexture(gl.TEXTURE_2D, this.textures["IMAGE_DECODED"].glTexture);
+
+	  gl.copyTexSubImage2D(gl.TEXTURE_2D, 0,
+			     x, y, 0, 0,
+			     clipSize.width, clipSize.height);
         }
       }
+    }
 
+    drawDisplayCanvas() {
+      const gl = this.gl;
+
+      const displayShader = this.shaderEnabled ? this.shaders["DISPLAY"] : false;
+
+      // Clear
+      // TODO(zellyn): uncomment
+      // gl.clearColor(0, 0, 0, 1);
+      // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      if (this.image.width == 0 || this.image.height == 0) {
+	this.resizeTexture("IMAGE_PERSISTENCE", 0, 0);
+	return;
+      }
+
+      // Grab common variables
+      const displayResolution = this.display.displayResolution;
+
+      // Vertex rect
+      const vertexRect = new Rect(-1, -1, 2, 2);
+
+      const viewportAspectRatio = this.viewportSize.ratio;
+      const displayAspectRatio = displayResolution.ratio;
+
+      const ratio = viewportAspectRatio / displayAspectRatio;
+
+      if (ratio > 1) {
+	vertexRect.origin.x /= ratio;
+	vertexRect.size.width /= ratio;
+      } else {
+	vertexRect.origin.y *= ratio;
+	vertexRect.size.height *= ratio;
+      }
+
+      // Base texture rect
+      const baseTexRect = new Rect(0, 0, 1, 1);
+
+      // Canvas texture rect
+      const interlaceShift = this.image.interlace / this.image.height;
+
+      const canvasTexLowerLeft = this.getDisplayCanvasTexPoint(
+	new Point(-1, -1 + 2 * interlaceShift));
+      const canvasTexUpperRight = this.getDisplayCanvasTexPoint(
+	new Point(1, 1 + 2 * interlaceShift));
+
+      const canvasTexRect = new Rect(canvasTexLowerLeft.x,
+                                     canvasTexLowerLeft.y,
+                                     canvasTexUpperRight.x - canvasTexLowerLeft.x,
+                                     canvasTexUpperRight.y - canvasTexLowerLeft.y);
+
+      const canvasSize = new Size(0.5 * this.viewportSize.width *
+                                  vertexRect.size.width,
+                                  0.5 * this.viewportSize.height *
+                                  vertexRect.size.height);
+
+      const canvasVideoSize = new Size(canvasSize.width *
+                                       this.display.videoSize.width,
+                                       canvasSize.height *
+                                       this.display.videoSize.height);
 
       // TODO(zellyn): implement
     }
 
-    // TODO(zellyn): implement
-    drawDisplayCanvas() {
+    getDisplayCanvasTexPoint(p) {
+      const videoCenter = this.display.videoCenter;
+      const videoSize = this.display.videoSize;
+
+      p = new Point((p.x - 2 * videoCenter.x) / videoSize.width,
+                    (p.y - 2 * videoCenter.y) / videoSize.height);
+
+      const imageSize = this.image.size;
+      const texSize = this.textures["IMAGE_IN"].size;
+
+      p.x = (p.x + 1) * 0.5 * imageSize.width / texSize.width;
+      p.y = (p.y + 1) * 0.5 * imageSize.height / texSize.height;
+
+      return p;
     }
 
     // Resize the texture with the given name to the next
@@ -1244,10 +1337,8 @@ void main(void)
       NTSC_I_CUTOFF: NTSC_I_CUTOFF,
       NTSC_Q_CUTOFF: NTSC_Q_CUTOFF,
       NTSC_IQ_DELTA: NTSC_IQ_DELTA,
-      NTSC_DETAILS: buildTiming(ntscClockFrequency, ntscDisplayRect,
-                                ntscVisibleRect, ntscVertTotal, NTSC_FSC),
-      PAL_DETAILS: buildTiming(palClockFrequency, palDisplayRect,
-                               palVisibleRect, palVertTotal, PAL_FSC),
+      NTSC_DETAILS: NTSC_DETAILS,
+      PAL_DETAILS: PAL_DETAILS,
     },
     loadImage: loadImage,
     screenData: screenData,
@@ -1260,5 +1351,6 @@ void main(void)
     DisplayConfiguration: DisplayConfiguration,
     ImageInfo: ImageInfo,
     Vector: Vector,
+    Size: Size,
   };
 })();

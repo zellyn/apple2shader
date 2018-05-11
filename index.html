@@ -25,31 +25,10 @@
 </head>
 <body>
   <script src="screenEmu.js"></script>
-  <script id="vertexShader" type="x-shader/x-vertex">
-// an attribute will receive data from a buffer
-attribute vec4 a_position;
-
-// all shaders have a main function
-void main() {
-  // gl_Position is a special variable a vertex shader
-  // is responsible for setting
-  gl_Position = a_position;
-}
-  </script>
-  <script id="fragmentShader" type="x-shader/x-fragment">
-// fragment shaders don't have a default precision so we need
-// to pick one. mediump is a good default. It means "medium precision"
-precision mediump float;
-
-void main() {
-  // gl_FragColor is a special variable a fragment shader
-  // is responsible for setting
-  gl_FragColor = vec4(1, 0, 0.5, 1); // return redish-purple
-}
-  </script>
 
   <div class="wrapper">
   <div class="controls">
+    <form>
     <table>
       <tr>
         <td>Decoder</td>
@@ -149,74 +128,22 @@ void main() {
         <td>Luminance Gain</td>
         <td><input type="range" min="1" max="2" step="0.01" value="1" class="slider" id="displayLuminanceGain"></td>
       </tr>
+      <tr>
+	<td>&nbsp</td>
+	<td></td>
+      </tr>
+      <tr>
+	<td></td>
+	<td><input type="reset" value="Reset"></td>
+      </tr>
     </table>
+    </form>
   </div>
   <div class="screen">
-    <canvas id="c"></canvas>
-    <canvas id="d" width="755" height="240"></canvas>
+    <canvas id="d" width="768" height="576"></canvas>
   </div>
   </div><!-- class="wrapper" -->
   <script>
-    "use strict";
-
-    // Initialization
-
-    let canvas = document.getElementById("c");
-    let gl = canvas.getContext("webgl");
-
-    let vertexShaderSource = document.getElementById("vertexShader").text;
-    let fragmentShaderSource = document.getElementById("fragmentShader").text;
-    let vertexShader = screenEmu.createShader(gl, 'vertexShader', gl.VERTEX_SHADER, vertexShaderSource);
-    let fragmentShader = screenEmu.createShader(gl, 'fragmentShader', gl.FRAGMENT_SHADER, fragmentShaderSource);
-
-    let program = screenEmu.createProgram(gl, 'program', vertexShader, fragmentShader);
-
-    let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
-    let positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-    let positions = [
-      0, 0,
-      0, 0.5,
-      0.7, 0,
-    ];
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-    // Rendering
-
-    screenEmu.resizeCanvas(gl.canvas);
-    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
-    // Clear the canvas.
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    // Use our pair of shaders.
-    gl.useProgram(program);
-
-    // Turn the attribute on.
-    gl.enableVertexAttribArray(positionAttributeLocation);
-    // Tell it how to pull the data out.
-
-    // Bind the position buffer.
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-
-    // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
-    let size = 2;          // 2 components per iteration
-    let type = gl.FLOAT;   // the data is 32bit floats
-    let normalize = false; // don't normalize the data
-    let stride = 0;        // 0 = move forward size * sizeof(type) each iteration
-    let offset = 0;        // start at the beginning of the buffer
-
-    // (Binds current ARRAY_BUFFER attribute.)
-    gl.vertexAttribPointer(positionAttributeLocation, size, type, normalize, stride, offset);
-
-    // Execute our program!
-    let primitiveType = gl.TRIANGLES;
-    offset = 0;
-    let count = 3;
-    gl.drawArrays(primitiveType, offset, count);
-
     // screenEmu.loadImage("images/airheart-560x192.png").then(image => {
     //   let [c, data] = screenEmu.screenData(image, screenEmu.C.NTSC_DETAILS);
     //   document.body.appendChild(c);
@@ -230,21 +157,9 @@ void main() {
       let sv = new screenEmu.ScreenView(canvas);
       await sv.initOpenGL();
 
-      const sampleRate = 4 * screenEmu.C.NTSC_DETAILS.fsc;
-      const blackLevel = 0;
-      const whiteLevel = 1;
-      const subCarrier = screenEmu.C.NTSC_DETAILS.fsc;
-      const colorBurst = screenEmu.C.NTSC_DETAILS.colorBurst;
-      const phaseAlternation = [false];
-      let imageInfo = new screenEmu.ImageInfo(
-        sampleRate,
-        blackLevel,
-        whiteLevel,
-        subCarrier,
-        colorBurst,
-        phaseAlternation,
-        imageData);
+      let imageInfo = new screenEmu.ImageInfo(imageData);
       let displayConfig = new screenEmu.DisplayConfiguration();
+      displayConfig.displayResolution = new screenEmu.Size(d.width, d.height);
       sv.image = imageInfo;
       sv.displayConfiguration = displayConfig;
       sv.vsync();
