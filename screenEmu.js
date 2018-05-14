@@ -272,7 +272,7 @@ const screenEmu = (function () {
 				  HORIZ_DISPLAY, VERT_DISPLAY);
   const palVertTotal = PAL_VTOTAL;
 
-  const VERTEX_SHADER =`
+  const VERTEX_RENDER_SHADER =`
 // an attribute will receive data from a buffer
 attribute vec4 a_position;
 attribute vec2 a_texCoord;
@@ -284,6 +284,24 @@ void main() {
   // is responsible for setting
   gl_Position = a_position;
   v_texCoord = a_texCoord;
+}
+`;
+
+  const VERTEX_DISPLAY_SHADER =`
+// an attribute will receive data from a buffer
+attribute vec4 a_position;
+attribute vec2 a_texCoord;
+attribute vec2 a_texCoord2;
+varying vec2 v_texCoord;
+varying vec2 v_texCoord2;
+
+// all shaders have a main function
+void main() {
+  // gl_Position is a special variable a vertex shader
+  // is responsible for setting
+  gl_Position = a_position;
+  v_texCoord = a_texCoord;
+  v_texCoord2 = a_texCoord2;
 }
 `;
 
@@ -335,6 +353,7 @@ void main(void)
 precision mediump float;
 
 varying vec2 v_texCoord;
+varying vec2 v_texCoord2;
 
 uniform sampler2D texture;
 uniform vec2 textureSize;
@@ -355,7 +374,7 @@ float PI = 3.14159265358979323846264;
 
 void main(void)
 {
-  vec2 qc = (v_texCoord - vec2(0.5, 0.5)) * barrelSize;
+  vec2 qc = (v_texCoord2 - vec2(0.5, 0.5)) * barrelSize;
   vec2 qb = barrel * qc * dot(qc, qc);
   vec2 q = v_texCoord + qb;
 
@@ -364,7 +383,7 @@ void main(void)
   float scanline = sin(PI * textureSize.y * q.y);
   c *= mix(1.0, scanline * scanline, scanlineLevel);
 
-  vec3 mask = texture2D(shadowMask, (v_texCoord + qb) * shadowMaskSize).rgb;
+  vec3 mask = texture2D(shadowMask, (v_texCoord2 + qb) * shadowMaskSize).rgb;
   c *= mix(vec3(1.0, 1.0, 1.0), mask, shadowMaskLevel);
 
   vec2 lighting = qc * centerLighting;
@@ -372,7 +391,7 @@ void main(void)
 
   c *= luminanceGain;
 
-  vec2 qp = v_texCoord * persistenceSize + persistenceOrigin;
+  vec2 qp = v_texCoord2 * persistenceSize + persistenceOrigin;
   c = max(c, texture2D(persistence, qp).rgb * persistenceLevel - 0.5 / 256.0);
 
   gl_FragColor = vec4(c, 1.0);
@@ -671,7 +690,6 @@ void main(void)
 
       this.configurationChanged = true;
       this.imageChanged = true;
-      this.shaderEnabled = true;
     }
 
     get image() {
@@ -752,14 +770,15 @@ void main(void)
     }
 
     loadShaders() {
-      this.loadShader("COMPOSITE", COMPOSITE_SHADER);
-      this.loadShader("DISPLAY", DISPLAY_SHADER);
-      this.loadShader("RGB", RGB_SHADER);
+      this.loadShader("COMPOSITE", COMPOSITE_SHADER, VERTEX_RENDER_SHADER);
+      this.loadShader("RGB", RGB_SHADER, VERTEX_RENDER_SHADER);
+      this.loadShader("DISPLAY", DISPLAY_SHADER, VERTEX_DISPLAY_SHADER);
     }
 
-    loadShader(name, source) {
-      const glVertexShader = createShader(this.gl, name, this.gl.VERTEX_SHADER, VERTEX_SHADER);
-      const glFragmentShader = createShader(this.gl, name, this.gl.FRAGMENT_SHADER, source);
+    loadShader(name, fragmentSource, vertexSource) {
+      const glVertexShader = createShader(this.gl, name, this.gl.VERTEX_SHADER, vertexSource);
+      const glFragmentShader = createShader(this.gl, name, this.gl.FRAGMENT_SHADER,
+					    fragmentSource);
       const glProgram = createProgram(this.gl, name, glVertexShader, glFragmentShader);
       this.gl.deleteShader(glVertexShader);
       this.gl.deleteShader(glFragmentShader);
@@ -866,7 +885,8 @@ void main(void)
       case "CANVAS_CXA2025AS":
         return [this.shaders["COMPOSITE"], "COMPOSITE"];
       }
-      return [null, null];
+      const decoder = this.display.videoDecoder;
+      throw new Error(`unknown displayConfiguration.videoDecoder: ${decoder}`);
     }
 
     configureShaders() {
@@ -874,9 +894,6 @@ void main(void)
 
       const [renderShader, renderShaderName] = this.getRenderShader();
       const displayShader = this.shaders["DISPLAY"];
-
-      if (!renderShader || !displayShader)
-        return;
 
       const isCompositeDecoder = (renderShaderName == "COMPOSITE");
 
@@ -1096,8 +1113,6 @@ void main(void)
     renderImage() {
       const gl = this.gl;
       const [renderShader, renderShaderName] = this.getRenderShader();
-      if (!renderShader || !this.shaderEnabled)
-        return;
 
       const isCompositeDecoder = (renderShaderName == "COMPOSITE");
 
@@ -1222,7 +1237,7 @@ void main(void)
     drawDisplayCanvas() {
       const gl = this.gl;
 
-      const displayShader = this.shaderEnabled ? this.shaders["DISPLAY"] : false;
+      const displayShader = this.shaders["DISPLAY"];
 
       // Clear
       // TODO(zellyn): uncomment
@@ -1282,104 +1297,159 @@ void main(void)
       let barrelTexRect;
 
       // Render
-      let texture;
-      if (displayShader)
-        texture = this.textures["IMAGE_DECODED"];
-      else
-        texture = this.textures["IMAGE_IN"];
+      const texture = this.textures["IMAGE_DECODED"];
 
       // Set uniforms
-      if (displayShader)
+      gl.useProgram(displayShader);
+
+      // Texture
+      const texSize = texture.size;
+
+      gl.uniform1i(gl.getUniformLocation(displayShader, "texture"), 0);
+      gl.uniform2f(gl.getUniformLocation(displayShader, "textureSize"),
+                   texSize.width, texSize.height);
+
+      // Barrel
+      barrelTexRect = new Rect(-0.5, -0.5 / displayAspectRatio,
+                               1.0, 1.0 / displayAspectRatio);
+      gl.uniform2f(gl.getUniformLocation(displayShader, "barrelSize"),
+                   1, 1.0 / displayAspectRatio);
+
+      // Scanlines
+      const scanlineHeight = canvasVideoSize.height / this.image.height;
+      let scanlineLevel = this.display.displayScanlineLevel;
+
+      scanlineLevel = ((scanlineHeight > 2.5) ? scanlineLevel :
+                       (scanlineHeight < 2) ? 0 :
+                       (scanlineHeight - 2) / (2.5 - 2) * scanlineLevel);
+
+      gl.uniform1f(gl.getUniformLocation(displayShader, "scanlineLevel"), scanlineLevel);
+
+      // Shadow mask
+      let shadowMaskTexture;
+      let shadowMaskAspectRatio;
+      switch (this.display.displayShadowMask)
       {
-        gl.useProgram(displayShader);
-
-        // Texture
-        const texSize = texture.size;
-
-        gl.uniform1i(gl.getUniformLocation(displayShader, "texture"), 0);
-        gl.uniform2f(gl.getUniformLocation(displayShader, "textureSize"),
-                     texSize.width, texSize.height);
-
-        // Barrel
-        barrelTexRect = new Rect(-0.5, -0.5 / displayAspectRatio,
-                                 1.0, 1.0 / displayAspectRatio);
-        gl.uniform2f(gl.getUniformLocation(displayShader, "barrelSize"),
-                     1, 1.0 / displayAspectRatio);
-
-        // Scanlines
-        const scanlineHeight = canvasVideoSize.height / this.image.height;
-        let scanlineLevel = this.display.displayScanlineLevel;
-
-        scanlineLevel = ((scanlineHeight > 2.5) ? scanlineLevel :
-                         (scanlineHeight < 2) ? 0 :
-                         (scanlineHeight - 2) / (2.5 - 2) * scanlineLevel);
-
-        gl.uniform1f(gl.getUniformLocation(displayShader, "scanlineLevel"), scanlineLevel);
-
-        // Shadow mask
-        let shadowMaskTexture;
-        let shadowMaskAspectRatio;
-        switch (this.display.displayShadowMask)
-        {
-          case "SHADOWMASK_TRIAD":
-            shadowMaskTexture = this.textures["SHADOWMASK_TRIAD"];
-            shadowMaskAspectRatio = 2 / (274.0 / 240.0);
-            break;
-          case "SHADOWMASK_INLINE":
-            shadowMaskTexture = this.textures["SHADOWMASK_INLINE"];
-            shadowMaskAspectRatio = 2;
-            break;
-          case "SHADOWMASK_APERTURE":
-            shadowMaskTexture = this.textures["SHADOWMASK_APERTURE"];
-            shadowMaskAspectRatio = 2;
-            break;
-          case "SHADOWMASK_LCD":
-            shadowMaskTexture = this.textures["SHADOWMASK_LCD"];
-            shadowMaskAspectRatio = 2;
-            break;
-          case "SHADOWMASK_BAYER":
-            shadowMaskTexture = this.textures["SHADOWMASK_BAYER"];
-            shadowMaskAspectRatio = 2;
+        case "SHADOWMASK_TRIAD":
+          shadowMaskTexture = this.textures["SHADOWMASK_TRIAD"];
+          shadowMaskAspectRatio = 2 / (274.0 / 240.0);
           break;
-        }
-
-        const shadowMaskDotPitch = this.display.displayShadowMaskDotPitch;
-
-        if (shadowMaskDotPitch <= 0.001)
-          shadowMaskDotPitch = 0.001;
-
-        const shadowMaskElemX = (displayResolution.width /
-                                 this.display.displayPixelDensity *
-                                 25.4 * 0.5 / shadowMaskDotPitch);
-        const shadowMaskSize = new Size(shadowMaskElemX,
-                                        shadowMaskElemX * shadowMaskAspectRatio /
-                                        displayAspectRatio);
-
-        gl.activeTexture(gl.TEXTURE1);
-
-        gl.bindTexture(gl.TEXTURE_2D, shadowMaskTexture.glTexture);
-
-        gl.uniform2f(gl.getUniformLocation(displayShader, "shadowMaskSize"),
-                     shadowMaskSize.width, shadowMaskSize.height);
-
-        // Persistence
-        gl.activeTexture(gl.TEXTURE2);
-
-        gl.bindTexture(gl.TEXTURE_2D, this.textures["IMAGE_PERSISTENCE"].glTexture);
-
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-
-        gl.activeTexture(gl.TEXTURE0);
-
-        gl.uniform1i(gl.getUniformLocation(displayShader, "persistence"), 2);
-        gl.uniform2f(gl.getUniformLocation(displayShader, "persistenceOrigin"),
-                     this.persistenceTexRect.x, this.persistenceTexRect.y);
-        gl.uniform2f(gl.getUniformLocation(displayShader, "persistenceSize"),
-                     this.persistenceTexRect.width, this.persistenceTexRect.height);
+        case "SHADOWMASK_INLINE":
+          shadowMaskTexture = this.textures["SHADOWMASK_INLINE"];
+          shadowMaskAspectRatio = 2;
+          break;
+        case "SHADOWMASK_APERTURE":
+          shadowMaskTexture = this.textures["SHADOWMASK_APERTURE"];
+          shadowMaskAspectRatio = 2;
+          break;
+        case "SHADOWMASK_LCD":
+          shadowMaskTexture = this.textures["SHADOWMASK_LCD"];
+          shadowMaskAspectRatio = 2;
+          break;
+        case "SHADOWMASK_BAYER":
+          shadowMaskTexture = this.textures["SHADOWMASK_BAYER"];
+          shadowMaskAspectRatio = 2;
+        break;
       }
 
+      const shadowMaskDotPitch = this.display.displayShadowMaskDotPitch;
+
+      if (shadowMaskDotPitch <= 0.001)
+        shadowMaskDotPitch = 0.001;
+
+      const shadowMaskElemX = (displayResolution.width /
+                               this.display.displayPixelDensity *
+                               25.4 * 0.5 / shadowMaskDotPitch);
+      const shadowMaskSize = new Size(shadowMaskElemX,
+                                      shadowMaskElemX * shadowMaskAspectRatio /
+                                      displayAspectRatio);
+
+      gl.activeTexture(gl.TEXTURE1);
+
+      gl.bindTexture(gl.TEXTURE_2D, shadowMaskTexture.glTexture);
+
+      gl.uniform2f(gl.getUniformLocation(displayShader, "shadowMaskSize"),
+                   shadowMaskSize.width, shadowMaskSize.height);
+
+      // Persistence
+      gl.activeTexture(gl.TEXTURE2);
+
+      gl.bindTexture(gl.TEXTURE_2D, this.textures["IMAGE_PERSISTENCE"].glTexture);
+
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+      gl.activeTexture(gl.TEXTURE0);
+
+      gl.uniform1i(gl.getUniformLocation(displayShader, "persistence"), 2);
+      gl.uniform2f(gl.getUniformLocation(displayShader, "persistenceOrigin"),
+                   this.persistenceTexRect.x, this.persistenceTexRect.y);
+      gl.uniform2f(gl.getUniformLocation(displayShader, "persistenceSize"),
+                   this.persistenceTexRect.width, this.persistenceTexRect.height);
+      // Old fixed pipeline stuff.
+      // gl.loadIdentity();
+      // gl.rotatef(180, 1, 0, 0);
+
+      gl.bindTexture(gl.TEXTURE_2D, texture.glTexture);
+
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
       // TODO(zellyn): implement
+
+      // zjh:begin
+/*
+      // Render
+    gl.begin(gl.QUADS);
+    gl.texCoord2f(OEMinX(canvasTexRect), OEMinY(canvasTexRect));
+    gl.multiTexCoord2d(1, OEMinX(baseTexRect), OEMinY(baseTexRect));
+    gl.vertex2f(OEMinX(vertexRect), OEMinY(vertexRect));
+
+    gl.texCoord2f(OEMaxX(canvasTexRect), OEMinY(canvasTexRect));
+    gl.multiTexCoord2d(1, OEMaxX(baseTexRect), OEMinY(baseTexRect));
+    gl.vertex2f(OEMaxX(vertexRect), OEMinY(vertexRect));
+
+    gl.texCoord2f(OEMaxX(canvasTexRect), OEMaxY(canvasTexRect));
+    gl.multiTexCoord2d(1, OEMaxX(baseTexRect), OEMaxY(baseTexRect));
+    gl.vertex2f(OEMaxX(vertexRect), OEMaxY(vertexRect));
+
+    gl.texCoord2f(OEMinX(canvasTexRect), OEMaxY(canvasTexRect));
+    gl.multiTexCoord2d(1, OEMinX(baseTexRect), OEMaxY(baseTexRect));
+    gl.vertex2f(OEMinX(vertexRect), OEMaxY(vertexRect));
+    gl.end();
+
+    if (displayConfiguration.displayPersistence != 0.0)
+    {
+        updateTextureSize(OPENGLCANVAS_IMAGE_PERSISTENCE, viewportSize);
+
+        gl.bindTexture(gl.TEXTURE_2D, texture[OPENGLCANVAS_IMAGE_PERSISTENCE]);
+
+        gl.readBuffer(gl.BACK);
+
+        gl.copyTexSubImage2D(gl.TEXTURE_2D, 0,
+                            0, 0, 0, 0,
+                            viewportSize.width, viewportSize.height);
+
+        OESize persistenceTexSize = OEMakeSize(viewportSize.width /
+                                               textureSize[OPENGLCANVAS_IMAGE_PERSISTENCE].width,
+                                               viewportSize.height /
+                                               textureSize[OPENGLCANVAS_IMAGE_PERSISTENCE].height);
+        persistenceTexRect = OEMakeRect((vertexRect.origin.x + 1) * 0.5F * persistenceTexSize.width,
+                                        (vertexRect.origin.y + 1) * 0.5F * persistenceTexSize.height,
+                                        vertexRect.size.width * 0.5F * persistenceTexSize.width,
+                                        vertexRect.size.height * 0.5F * persistenceTexSize.height);
+
+        persistenceTexRect.origin.y += persistenceTexRect.size.height;
+        persistenceTexRect.size.height = -persistenceTexRect.size.height;
+    }
+
+    gl.useProgram(0);
+
+    // zjh:end
+*/
     }
 
     getDisplayCanvasTexPoint(p) {
