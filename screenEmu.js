@@ -535,10 +535,7 @@ void main(void)
     "IMAGE_PERSISTENCE",
   ];
 
-  const BUFFER_NAMES = [
-    "POSITION",
-    "TEXCOORD",
-  ];
+  const BUFFER_COUNT = 3;
 
   const SHADER_NAMES = [
     "COMPOSITE",
@@ -678,7 +675,7 @@ void main(void)
       this.gl = gl;
       this.textures = {};
       this.shaders = {};
-      this.buffers = {};
+      this.buffers = [];
       this.image = null;
       this.display = null;
       this.imageSampleRate = null;
@@ -718,8 +715,8 @@ void main(void)
         this.textures[name] = new TextureInfo(0, 0, gl.createTexture());
       }
 
-      for (let name of BUFFER_NAMES) {
-        this.buffers[name] = gl.createBuffer();
+      for (let i = 0; i < BUFFER_COUNT; i++) {
+        this.buffers.push(gl.createBuffer());
       }
 
       await this.loadTextures();
@@ -737,8 +734,8 @@ void main(void)
         gl.deleteTexture(this.textures[name].glTexture);
       }
 
-      for (let name of BUFFER_NAMES) {
-        gl.deleteBuffer(this.buffers[name]);
+      for (let buffer of this.buffers) {
+        gl.deleteBuffer(buffer);
       }
 
       this.deleteShaders();
@@ -1179,50 +1176,7 @@ void main(void)
           // What is this, some ancient fixed pipeline nonsense? No way.
           // glLoadIdentity();
 
-          const positionLocation = gl.getAttribLocation(renderShader, "a_position");
-          const texcoordLocation = gl.getAttribLocation(renderShader, "a_texCoord");
-          const positionBuffer = this.buffers["POSITION"];
-          gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-          const p_x1 = canvasRect.l;
-          const p_x2 = canvasRect.r;
-          const p_y1 = canvasRect.t;
-          const p_y2 = canvasRect.b;
-          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            p_x1, p_y1,
-            p_x2, p_y1,
-            p_x1, p_y2,
-            p_x1, p_y2,
-            p_x2, p_y1,
-            p_x2, p_y2,
-          ]), gl.STATIC_DRAW);
-
-          const texcoordBuffer = this.buffers["TEXCOORD"];
-          gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-          const t_x1 = textureRect.l;
-          const t_x2 = textureRect.r;
-          const t_y1 = textureRect.t;
-          const t_y2 = textureRect.b;
-          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-            t_x1, t_y1,
-            t_x2, t_y1,
-            t_x1, t_y2,
-            t_x1, t_y2,
-            t_x2, t_y1,
-            t_x2, t_y2,
-          ]), gl.STATIC_DRAW);
-
-          gl.clearColor(0, 0, 0, 0);
-          gl.clear(gl.COLOR_BUFFER_BIT);
-
-          gl.enableVertexAttribArray(positionLocation);
-          gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-          gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
-
-          gl.enableVertexAttribArray(texcoordLocation);
-          gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-          gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
-
-          gl.drawArrays(gl.TRIANGLES, 0, 6);
+	  this.drawRectangle(renderShader, canvasRect, textureRect);
 
 	  // Copy framebuffer
 	  gl.bindTexture(gl.TEXTURE_2D, this.textures["IMAGE_DECODED"].glTexture);
@@ -1232,6 +1186,56 @@ void main(void)
 			     clipSize.width, clipSize.height);
         }
       }
+    }
+
+    drawRectangle(shader, posRect, texRect, texRect2) {
+      const gl = this.gl;
+
+      const positionLocation = gl.getAttribLocation(shader, "a_position");
+      const texcoordLocation = gl.getAttribLocation(shader, "a_texCoord");
+
+      const positionBuffer = this.buffers[0];
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      const p_x1 = posRect.l;
+      const p_x2 = posRect.r;
+      const p_y1 = posRect.t;
+      const p_y2 = posRect.b;
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        p_x1, p_y1,
+        p_x2, p_y1,
+        p_x1, p_y2,
+        p_x1, p_y2,
+        p_x2, p_y1,
+        p_x2, p_y2,
+      ]), gl.STATIC_DRAW);
+
+      const texcoordBuffer = this.buffers[1];
+      gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+      const t_x1 = texRect.l;
+      const t_x2 = texRect.r;
+      const t_y1 = texRect.t;
+      const t_y2 = texRect.b;
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        t_x1, t_y1,
+        t_x2, t_y1,
+        t_x1, t_y2,
+        t_x1, t_y2,
+        t_x2, t_y1,
+        t_x2, t_y2,
+      ]), gl.STATIC_DRAW);
+
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.enableVertexAttribArray(positionLocation);
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+      gl.enableVertexAttribArray(texcoordLocation);
+      gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+      gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
     drawDisplayCanvas() {
