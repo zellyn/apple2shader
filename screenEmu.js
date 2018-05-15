@@ -280,8 +280,6 @@ varying vec2 v_texCoord;
 
 // all shaders have a main function
 void main() {
-  // gl_Position is a special variable a vertex shader
-  // is responsible for setting
   gl_Position = a_position;
   v_texCoord = a_texCoord;
 }
@@ -297,9 +295,7 @@ varying vec2 v_texCoord2;
 
 // all shaders have a main function
 void main() {
-  // gl_Position is a special variable a vertex shader
-  // is responsible for setting
-  gl_Position = a_position;
+  gl_Position = vec4(a_position.x, -a_position.y, a_position.z, a_position.w);
   v_texCoord = a_texCoord;
   v_texCoord2 = a_texCoord2;
 }
@@ -827,7 +823,7 @@ void main(void)
       const gl = this.gl;
       const image = this.image;
 
-      this.resizeTexture("IMAGE_IN", image.width, image.height);
+      this.resizeTexture("IMAGE_IN", image.width, image.height, true);
       const texInfoImage = this.textures["IMAGE_IN"];
       gl.bindTexture(gl.TEXTURE_2D, texInfoImage.glTexture);
       const format = gl.LUMINANCE;
@@ -1191,8 +1187,16 @@ void main(void)
     drawRectangle(shader, posRect, texRect, texRect2) {
       const gl = this.gl;
 
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
       const positionLocation = gl.getAttribLocation(shader, "a_position");
-      const texcoordLocation = gl.getAttribLocation(shader, "a_texCoord");
+      const texcoordLocations = [gl.getAttribLocation(shader, "a_texCoord")];
+      const texRects = [texRect];
+      if (texRect2) {
+	texcoordLocations.push(gl.getAttribLocation(shader, "a_texCoord2"));
+	texRects.push(texRect2);
+      }
 
       const positionBuffer = this.buffers[0];
       gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
@@ -1209,31 +1213,30 @@ void main(void)
         p_x2, p_y2,
       ]), gl.STATIC_DRAW);
 
-      const texcoordBuffer = this.buffers[1];
-      gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-      const t_x1 = texRect.l;
-      const t_x2 = texRect.r;
-      const t_y1 = texRect.t;
-      const t_y2 = texRect.b;
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-        t_x1, t_y1,
-        t_x2, t_y1,
-        t_x1, t_y2,
-        t_x1, t_y2,
-        t_x2, t_y1,
-        t_x2, t_y2,
-      ]), gl.STATIC_DRAW);
-
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-
       gl.enableVertexAttribArray(positionLocation);
       gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
       gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
 
-      gl.enableVertexAttribArray(texcoordLocation);
-      gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
-      gl.vertexAttribPointer(texcoordLocation, 2, gl.FLOAT, false, 0, 0);
+      for (let i = 0; i < texRects.length; i++) {
+	const texcoordBuffer = this.buffers[i+1];
+	gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+	const t_x1 = texRects[i].l;
+	const t_x2 = texRects[i].r;
+	const t_y1 = texRects[i].t;
+	const t_y2 = texRects[i].b;
+	gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+          t_x1, t_y1,
+          t_x2, t_y1,
+          t_x1, t_y2,
+          t_x1, t_y2,
+          t_x2, t_y1,
+          t_x2, t_y2,
+	]), gl.STATIC_DRAW);
+
+	gl.enableVertexAttribArray(texcoordLocations[i]);
+	gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+	gl.vertexAttribPointer(texcoordLocations[i], 2, gl.FLOAT, false, 0, 0);
+      }
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
@@ -1244,7 +1247,7 @@ void main(void)
       const displayShader = this.shaders["DISPLAY"];
 
       // Clear
-      // TODO(zellyn): uncomment
+      // (Moved inside drawRectangle)
       // gl.clearColor(0, 0, 0, 1);
       // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -1390,6 +1393,7 @@ void main(void)
                    this.persistenceTexRect.x, this.persistenceTexRect.y);
       gl.uniform2f(gl.getUniformLocation(displayShader, "persistenceSize"),
                    this.persistenceTexRect.width, this.persistenceTexRect.height);
+
       // Old fixed pipeline stuff.
       // gl.loadIdentity();
       // gl.rotatef(180, 1, 0, 0);
@@ -1402,29 +1406,12 @@ void main(void)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-      // TODO(zellyn): implement
 
-      // zjh:begin
-/*
       // Render
-    gl.begin(gl.QUADS);
-    gl.texCoord2f(OEMinX(canvasTexRect), OEMinY(canvasTexRect));
-    gl.multiTexCoord2d(1, OEMinX(baseTexRect), OEMinY(baseTexRect));
-    gl.vertex2f(OEMinX(vertexRect), OEMinY(vertexRect));
+      this.drawRectangle(displayShader, vertexRect, canvasTexRect, baseTexRect);
 
-    gl.texCoord2f(OEMaxX(canvasTexRect), OEMinY(canvasTexRect));
-    gl.multiTexCoord2d(1, OEMaxX(baseTexRect), OEMinY(baseTexRect));
-    gl.vertex2f(OEMaxX(vertexRect), OEMinY(vertexRect));
-
-    gl.texCoord2f(OEMaxX(canvasTexRect), OEMaxY(canvasTexRect));
-    gl.multiTexCoord2d(1, OEMaxX(baseTexRect), OEMaxY(baseTexRect));
-    gl.vertex2f(OEMaxX(vertexRect), OEMaxY(vertexRect));
-
-    gl.texCoord2f(OEMinX(canvasTexRect), OEMaxY(canvasTexRect));
-    gl.multiTexCoord2d(1, OEMinX(baseTexRect), OEMaxY(baseTexRect));
-    gl.vertex2f(OEMinX(vertexRect), OEMaxY(vertexRect));
-    gl.end();
-
+      // TODO(zellyn): implement
+/*
     if (displayConfiguration.displayPersistence != 0.0)
     {
         updateTextureSize(OPENGLCANVAS_IMAGE_PERSISTENCE, viewportSize);
@@ -1449,11 +1436,8 @@ void main(void)
         persistenceTexRect.origin.y += persistenceTexRect.size.height;
         persistenceTexRect.size.height = -persistenceTexRect.size.height;
     }
-
-    gl.useProgram(0);
-
-    // zjh:end
 */
+
     }
 
     getDisplayCanvasTexPoint(p) {
@@ -1475,7 +1459,7 @@ void main(void)
     // Resize the texture with the given name to the next
     // highest power of two width and height. Wouldn't be
     // necessary with webgl2.
-    resizeTexture(name, width, height) {
+    resizeTexture(name, width, height, luminance=false) {
       const gl = this.gl;
       const texInfo = this.textures[name];
       if (!texInfo) {
@@ -1489,9 +1473,11 @@ void main(void)
         texInfo.width = width;
         texInfo.height = height;
         gl.bindTexture(gl.TEXTURE_2D, texInfo.glTexture);
-        const dummy = new Uint8Array(width * height);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, width, height, 0,
-                      gl.LUMINANCE, gl.UNSIGNED_BYTE, dummy);
+	const length = width * height * (luminance ? 1 : 4);
+        const dummy = new Uint8Array(length);
+	const type = luminance ? gl.LUMINANCE : gl.RGBA;
+        gl.texImage2D(gl.TEXTURE_2D, 0, type, width, height, 0,
+                      type, gl.UNSIGNED_BYTE, dummy);
       }
     }
   }
