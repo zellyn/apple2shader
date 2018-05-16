@@ -1513,5 +1513,6 @@ void main(void)
     ImageInfo: ImageInfo,
     Vector: Vector,
     Size: Size,
+    Point: Point,
   };
 })();

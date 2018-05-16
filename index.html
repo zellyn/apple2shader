@@ -33,100 +33,102 @@
       <tr>
         <td>Decoder</td>
         <td>
-          <select id="decoder">
-            <option value="COMPOSITE_YUV">Composite Y'UV</option>
-            <option value="COMPOSITE_YIQ">Composite Y'IQ</option>
-            <option value="COMPOSITE_CXA2025AS">Composite CXA2025AS</option>
+          <select id="decoder" class="update">
+            <option value="CANVAS_YUV">Composite Y'UV</option>
+            <option value="CANVAS_YIQ">Composite Y'IQ</option>
+            <option value="CANVAS_CXA2025AS">Composite CXA2025AS</option>
+            <option value="CANVAS_RGB">RGB</option>
+            <option value="CANVAS_MONOCHROME">Monochrome</option>
           </select>
         </td>
       </tr>
       <tr>
         <td>Brightness</td>
-        <td><input type="range" min="-1" max="1" step="0.01" value="0" class="slider" id="videoBrightness"></td>
+        <td><input type="range" min="-1" max="1" step="0.01" value="0" class="slider update" id="videoBrightness"></td>
       </tr>
       <tr>
         <td>Contrast</td>
-        <td><input type="range" min="0" max="2" step="0.01" value="1" class="slider" id="videoContrast"></td>
+        <td><input type="range" min="0" max="2" step="0.01" value="1" class="slider update" id="videoContrast"></td>
       </tr>
       <tr>
         <td>Saturation</td>
-        <td><input type="range" min="0" max="2" step="0.01" value="1" class="slider" id="videoSaturation"></td>
+        <td><input type="range" min="0" max="2" step="0.01" value="1" class="slider update" id="videoSaturation"></td>
       </tr>
       <tr>
         <td>Hue</td>
-        <td><input type="range" min="-0.5" max="0.5" step="0.01" value="0" class="slider" id="videoHue"></td>
+        <td><input type="range" min="-0.5" max="0.5" step="0.01" value="0" class="slider update" id="videoHue"></td>
       </tr>
       <tr>
         <td>White Only</td>
-        <td><input type="checkbox" id="white-only"></td>
+        <td><input type="checkbox" id="white-only" class="update"></td>
       </tr>
       <tr>
         <td>Horizontal Center</td>
-        <td><input type="range" min="-0.1" max="0.1" step="0.01" value="0" class="slider" id="videoHorizontalCenter"></td>
+        <td><input type="range" min="-0.1" max="0.1" step="0.01" value="0" class="slider update" id="videoHorizontalCenter"></td>
       </tr>
       <tr>
         <td>Horizontal Size</td>
-        <td><input type="range" min="0.85" max="1.25" step="0.01" value="1.05" class="slider" id="videoHorizontalSize"></td>
+        <td><input type="range" min="0.85" max="1.25" step="0.01" value="1.05" class="slider update" id="videoHorizontalSize"></td>
       </tr>
       <tr>
         <td>Vertical Center</td>
-        <td><input type="range" min="-0.1" max="0.1" step="0.01" value="0" class="slider" id="videoVerticalCenter"></td>
+        <td><input type="range" min="-0.1" max="0.1" step="0.01" value="0" class="slider update" id="videoVerticalCenter"></td>
       </tr>
       <tr>
         <td>Vertical Size</td>
-        <td><input type="range" min="0.85" max="1.25" step="0.01" value="1.05" class="slider" id="videoVerticalSize"></td>
+        <td><input type="range" min="0.85" max="1.25" step="0.01" value="1.05" class="slider update" id="videoVerticalSize"></td>
       </tr>
       <tr>
         <td>Luma Bandwidth</td>
-        <td><input type="range" min="0" max="7159090" step="1" value="2000000" class="slider" id="videoLumaBandwidth"></td>
+        <td><input type="range" min="0" max="7159090" step="1" value="2000000" class="slider update" id="videoLumaBandwidth"></td>
       </tr>
       <tr>
         <td>Chroma Bandwidth</td>
-        <td><input type="range" min="0" max="7159090" step="1" value="600000" class="slider" id="videoChromaBandwidth"></td>
+        <td><input type="range" min="0" max="7159090" step="1" value="600000" class="slider update" id="videoChromaBandwidth"></td>
       </tr>
       <tr>
         <td>B/W Bandwidth</td>
-        <td><input type="range" min="0" max="7159090" step="1" value="6000000" class="slider" id="videoBandwidth"></td>
+        <td><input type="range" min="0" max="7159090" step="1" value="6000000" class="slider update" id="videoBandwidth"></td>
       </tr>
       <tr>
         <td>Barrel</td>
-        <td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider" id="displayBarrel"></td>
+        <td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider update" id="displayBarrel"></td>
       </tr>
       <tr>
         <td>Scanline Level</td>
-        <td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider" id="displayScanlineLevel"></td>
+        <td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider update" id="displayScanlineLevel"></td>
       </tr>
       <tr>
         <td>Shadow Mask Level</td>
-        <td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider" id="displayShadowMaskLevel"></td>
+        <td><input type="range" min="0" max="1" step="0.01" value="0.05" class="slider update" id="displayShadowMaskLevel"></td>
       </tr>
       <tr>
         <td>Shadow Mask Dot Pitch</td>
-        <td><input type="range" min="0" max="2" step="0.01" value="0.5" class="slider" id="displayShadowMaskDotPitch"></td>
+        <td><input type="range" min="0" max="2" step="0.01" value="0.5" class="slider update" id="displayShadowMaskDotPitch"></td>
       </tr>
       <tr>
         <td>Shadow Mask</td>
         <td>
-          <select id="shadow-mask">
-            <option value="triad">Triad</option>
-            <option value="inline">Inline</option>
-            <option value="aperture">Aperture</option>
-            <option value="lcd">LCD</option>
-            <option value="bayer">Bayer</option>
+          <select id="shadow-mask" class="update">
+            <option value="SHADOWMASK_TRIAD">Triad</option>
+            <option value="SHADOWMASK_INLINE">Inline</option>
+            <option value="SHADOWMASK_APERTURE">Aperture</option>
+            <option value="SHADOWMASK_LCD">LCD</option>
+            <option value="SHADOWMASK_BAYER">Bayer</option>
           </select>
         </td>
       </tr>
       <tr>
         <td>Persistence</td>
-        <td><input type="range" min="0" max="1" step="0.01" value="0" class="slider" id="displayPersistence"></td>
+        <td><input type="range" min="0" max="1" step="0.01" value="0" class="slider update" id="displayPersistence"></td>
       </tr>
       <tr>
         <td>Center Lighting</td>
-        <td><input type="range" min="0" max="1" step="0.01" value="1" class="slider" id="displayCenterLighting"></td>
+        <td><input type="range" min="0" max="1" step="0.01" value="1" class="slider update" id="displayCenterLighting"></td>
       </tr>
       <tr>
         <td>Luminance Gain</td>
-        <td><input type="range" min="1" max="2" step="0.01" value="1" class="slider" id="displayLuminanceGain"></td>
+        <td><input type="range" min="1" max="2" step="0.01" value="1" class="slider update" id="displayLuminanceGain"></td>
       </tr>
       <tr>
 	<td>&nbsp</td>
@@ -144,12 +146,35 @@
   </div>
   </div><!-- class="wrapper" -->
   <script>
-    // screenEmu.loadImage("images/airheart-560x192.png").then(image => {
-    //   let [c, data] = screenEmu.screenData(image, screenEmu.C.NTSC_DETAILS);
-    //   document.body.appendChild(c);
-    // });
+    function updateDisplayConfig(config) {
+      config.videoDecoder = document.getElementById('decoder').value;
+      config.videoBrightness = Number(document.getElementById('videoBrightness').value);
+      config.videoContrast = Number(document.getElementById('videoContrast').value);
+      config.videoSaturation = Number(document.getElementById('videoSaturation').value);
+      config.videoHue = Number(document.getElementById('videoHue').value);
+      config.videoCenter = new screenEmu.Point(
+	Number(document.getElementById('videoHorizontalCenter').value),
+	Number(document.getElementById('videoVerticalCenter').value)
+      );
+      config.videoSize = new screenEmu.Size(
+	Number(document.getElementById('videoHorizontalSize').value),
+	Number(document.getElementById('videoVerticalSize').value)
+      );
+      config.videoBandwidth = Number(document.getElementById('videoBandwidth').value);
+      config.videoLumaBandwidth = Number(document.getElementById('videoLumaBandwidth').value);
+      config.videoChromaBandwidth = Number(document.getElementById('videoChromaBandwidth').value);
+      config.videoWhiteOnly = document.getElementById('white-only').checked;;
+      config.displayBarrel = Number(document.getElementById('displayBarrel').value);
+      config.displayScanlineLevel = Number(document.getElementById('displayScanlineLevel').value);
+      config.displayShadowMaskLevel = Number(document.getElementById('displayShadowMaskLevel').value);
+      config.displayShadowMaskDotPitch = Number(document.getElementById('displayShadowMaskDotPitch').value);
+      config.displayShadowMask = document.getElementById('shadow-mask').value;
+      config.displayPersistence = Number(document.getElementById('displayPersistence').value);
+      config.displayCenterLighting = Number(document.getElementById('displayCenterLighting').value);
+      config.displayLuminanceGain = Number(document.getElementById('displayLuminanceGain').value);
+    }
 
-    async function tryScreenView() {
+    async function setupScreenView() {
       const image = await screenEmu.loadImage("images/airheart-560x192.png");
       const [imageCanvas, imageData] = screenEmu.screenData(image, screenEmu.C.NTSC_DETAILS);
 
@@ -164,12 +189,20 @@
       sv.displayConfiguration = displayConfig;
       sv.vsync();
 
-      sv.freeOpenGL();
+      update = () => {
+	updateDisplayConfig(displayConfig);
+	sv.displayConfiguration = displayConfig;
+	sv.vsync();
+      }
+
+      for (const elem of document.getElementsByClassName('update')) {
+	elem.onchange = update;
+      }
+
+      // sv.freeOpenGL();
     }
 
-    tryScreenView().then(() => console.log('tryScreenView: success'));
-
-    const w = screenEmu.Vector.lanczosWindow(17, 0.419047624);
+    setupScreenView().then(() => console.log('setupScreenView: success'));
 
   </script>
 </body>
