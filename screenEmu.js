@@ -487,7 +487,7 @@ void main(void)
   // image: a 560x192 image, from the same domain (hence readable).
   // details: NTSC_DETAILS, or PAL_DETAILS
   // returns: a canvas
-  const screenData = (image, details) => {
+  const screenData = (image, details, dhgr=true) => {
     if ((image.naturalWidth != 560) || (image.naturalHeight != 192)) {
       throw new Error('screenData expects an image 560x192;' +
                       ` got ${image.naturalWidth}x${image.naturalHeight}`);
@@ -500,7 +500,8 @@ void main(void)
     canvas.height = height;
     context.fillStyle = 'rgba(0,0,0,1)';
     context.fillRect(0, 0, width, height);
-    context.drawImage(image, details.topLeft80Col.x, details.topLeft80Col.y);
+    const topLeft = dhgr ? details.topLeft80Col : details.topLeft;
+    context.drawImage(image, topLeft.x, topLeft.y);
     const imageData = context.getImageData(0, 0, width, height);
     return [canvas, imageData];
   };

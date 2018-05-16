@@ -176,6 +176,7 @@
 
     async function setupScreenView() {
       const image = await screenEmu.loadImage("images/airheart-560x192.png");
+      // const image = await screenEmu.loadImage("images/battle-chess.png");
       const [imageCanvas, imageData] = screenEmu.screenData(image, screenEmu.C.NTSC_DETAILS);
 
       let canvas = document.getElementById("d");
