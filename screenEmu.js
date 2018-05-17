@@ -990,7 +990,7 @@ void main(void)
                                   0, 0, this.display.videoSaturation).mul(decoderMatrix);
 
       // Hue
-      const hue = 2 * Math.PI * this.display.videoHue;
+      let hue = 2 * Math.PI * this.display.videoHue;
 
       decoderMatrix = new Matrix3(1, 0, 0,
                                   0, Math.cos(hue), -Math.sin(hue),
@@ -1360,7 +1360,7 @@ void main(void)
         break;
       }
 
-      const shadowMaskDotPitch = this.display.displayShadowMaskDotPitch;
+      let shadowMaskDotPitch = this.display.displayShadowMaskDotPitch;
 
       if (shadowMaskDotPitch <= 0.001)
         shadowMaskDotPitch = 0.001;
