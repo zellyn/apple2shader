@@ -31,6 +31,17 @@
     <form>
     <table>
       <tr>
+        <td>Image</td>
+        <td>
+          <select id="input-image" class="input-image">
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td>&nbsp</td>
+        <td></td>
+      </tr>
+      <tr>
         <td>Decoder</td>
         <td>
           <select id="decoder" class="update">
@@ -131,12 +142,12 @@
         <td><input type="range" min="1" max="2" step="0.01" value="1" class="slider update" id="displayLuminanceGain"></td>
       </tr>
       <tr>
-	<td>&nbsp</td>
-	<td></td>
+        <td>&nbsp</td>
+        <td></td>
       </tr>
       <tr>
-	<td></td>
-	<td><input type="reset" value="Reset"></td>
+        <td></td>
+        <td><input type="reset" id="reset" value="Reset"></td>
       </tr>
     </table>
     </form>
@@ -153,12 +164,12 @@
       config.videoSaturation = Number(document.getElementById('videoSaturation').value);
       config.videoHue = Number(document.getElementById('videoHue').value);
       config.videoCenter = new screenEmu.Point(
-	Number(document.getElementById('videoHorizontalCenter').value),
-	Number(document.getElementById('videoVerticalCenter').value)
+        Number(document.getElementById('videoHorizontalCenter').value),
+        Number(document.getElementById('videoVerticalCenter').value)
       );
       config.videoSize = new screenEmu.Size(
-	Number(document.getElementById('videoHorizontalSize').value),
-	Number(document.getElementById('videoVerticalSize').value)
+        Number(document.getElementById('videoHorizontalSize').value),
+        Number(document.getElementById('videoVerticalSize').value)
       );
       config.videoBandwidth = Number(document.getElementById('videoBandwidth').value);
       config.videoLumaBandwidth = Number(document.getElementById('videoLumaBandwidth').value);
@@ -175,20 +186,40 @@
     }
 
     async function setupScreenView() {
-      const image = await screenEmu.loadImage("images/airheart-560x192.png");
-      // const image = await screenEmu.loadImage("images/battle-chess.png");
-      const [imageCanvas, imageData] = screenEmu.screenData(image, screenEmu.C.NTSC_DETAILS);
+      const images = [
+	["images/airheart-560x192.png", "Airheart",              true ],
+	["images/battle-chess.png",	"Battle Chess",          true ],
+	["images/archon.png",		"Archon",                false],
+	["images/archon-ii.png",	"Archon II",             true ],
+	["images/lode-runner.png",	"Lode Runner",           true ],
+	["images/marty-reader.png",	"Marty's Family Reader", true ],
+      ];
+
+      const image1 = await screenEmu.loadImage("images/airheart-560x192.png");
+      const image2 = await screenEmu.loadImage("images/battle-chess.png");
+      const image3 = await screenEmu.loadImage("images/archon.png");
+      const image4 = await screenEmu.loadImage("images/archon-ii.png");
+      const image5 = await screenEmu.loadImage("images/lode-runner.png");
+      const image6 = await screenEmu.loadImage("images/marty-reader.png");
+
+      const imsel = document.getElementById('input-image');
+
+      for (let i = 0; i < images.length; i++) {
+	const image = await screenEmu.loadImage(images[i][0]);
+	images[i].push(image);
+        const option = document.createElement("option");
+        option.text = images[i][1];
+        option.value = i;
+        imsel.appendChild(option);
+      }
 
       let canvas = document.getElementById("d");
       let sv = new screenEmu.ScreenView(canvas);
       await sv.initOpenGL();
 
-      let imageInfo = new screenEmu.ImageInfo(imageData);
       let displayConfig = new screenEmu.DisplayConfiguration();
       displayConfig.displayResolution = new screenEmu.Size(d.width, d.height);
-      sv.image = imageInfo;
       sv.displayConfiguration = displayConfig;
-      sv.vsync();
 
       update = () => {
 	updateDisplayConfig(displayConfig);
@@ -200,10 +231,30 @@
 	elem.onchange = update;
       }
 
+      updateImage = () => {
+        const index = Number(imsel.value);
+        const [imageCanvas, imageData] = screenEmu.screenData(images[index][3],
+                                                              screenEmu.C.NTSC_DETAILS,
+                                                              images[index][2]);
+        let imageInfo = new screenEmu.ImageInfo(imageData);
+        sv.image = imageInfo;
+        sv.vsync();
+      }
+
+      updateImage();
+      imsel.onchange = updateImage;
+
+      document.getElementById('reset').onclick = () => {
+	setTimeout(() => {
+	  update();
+	  updateImage();
+	}, 0);
+      }
+
       // sv.freeOpenGL();
     }
 
-    setupScreenView().then(() => console.log('setupScreenView: success'));
+    setupScreenView();
 
   </script>
 </body>
