@@ -187,12 +187,16 @@
 
     async function setupScreenView() {
       const images = [
-	["images/airheart-560x192.png", "Airheart",              true ],
-	["images/battle-chess.png",	"Battle Chess",          true ],
-	["images/archon.png",		"Archon",                false],
-	["images/archon-ii.png",	"Archon II",             true ],
-	["images/lode-runner.png",	"Lode Runner",           true ],
-	["images/marty-reader.png",	"Marty's Family Reader", true ],
+        ["images/airheart-560x192.png",     "Airheart",              true ],
+        ["images/battle-chess.png",         "Battle Chess",          true ],
+        ["images/archon.png",               "Archon",                false],
+        ["images/archon-ii.png",            "Archon II",             false],
+        ["images/lode-runner.png",          "Lode Runner",           false],
+        ["images/marty-reader.png",         "Marty's Family Reader", true ],
+        ["images/bards-tale.png",           "Bard's Tale",           false],
+        ["images/dazzledraw-flower.png",    "DazzleDraw flower",     true ],
+        ["images/rescue-raiders-pic.png",   "Rescue Raiders (a)",    false],
+        ["images/rescue-raiders-words.png", "Rescue Raiders (b)",    false],
       ];
 
       const image1 = await screenEmu.loadImage("images/airheart-560x192.png");
@@ -205,8 +209,8 @@
       const imsel = document.getElementById('input-image');
 
       for (let i = 0; i < images.length; i++) {
-	const image = await screenEmu.loadImage(images[i][0]);
-	images[i].push(image);
+        const image = await screenEmu.loadImage(images[i][0]);
+        images[i].push(image);
         const option = document.createElement("option");
         option.text = images[i][1];
         option.value = i;
@@ -222,13 +226,13 @@
       sv.displayConfiguration = displayConfig;
 
       update = () => {
-	updateDisplayConfig(displayConfig);
-	sv.displayConfiguration = displayConfig;
-	sv.vsync();
+        updateDisplayConfig(displayConfig);
+        sv.displayConfiguration = displayConfig;
+        sv.vsync();
       }
 
       for (const elem of document.getElementsByClassName('update')) {
-	elem.onchange = update;
+        elem.onchange = update;
       }
 
       updateImage = () => {
@@ -245,10 +249,10 @@
       imsel.onchange = updateImage;
 
       document.getElementById('reset').onclick = () => {
-	setTimeout(() => {
-	  update();
-	  updateImage();
-	}, 0);
+        setTimeout(() => {
+          update();
+          updateImage();
+        }, 0);
       }
 
       // sv.freeOpenGL();
