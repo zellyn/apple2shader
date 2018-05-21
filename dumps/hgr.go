@@ -73,6 +73,10 @@ func run(args []string) error {
 			paletted.Set(x0+2*b, y, c)
 			paletted.Set(x0+2*b+1, y, c)
 		}
+		// Draw an extra dot so delayed patterns can "extend" the last value.
+		if val&0x80 == 0 && val&0x40 > 0 {
+			paletted.Set(x0+2*7, y, color.White)
+		}
 	}
 
 	f, err := os.Create(args[1])
