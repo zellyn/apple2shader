@@ -7,3 +7,4 @@
 ./hgr rescue-raiders-pic.hgr.bin ../images/rescue-raiders-pic.png
 ./hgr rescue-raiders-words.hgr.bin ../images/rescue-raiders-words.png
 ./hgr ancient-legends.hgr.bin ../images/ancient-legends.png
+./hgr u5-shadowlords.hgr.bin ../images/u5-shadowlords.png
