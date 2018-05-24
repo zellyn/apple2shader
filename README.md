@@ -7,3 +7,9 @@ Port(s) of the OpenEmulator NTSC/PAL GPU shader.
 
 This is *very much* a work in progress. Right now I'm putting it on
 github simply for backup.
+
+## Contributors
+
+The original code was written by Marc S. Ressl. This is just a port: all the logic is due to them.
+
+- [https://github.com/Michaelangel007](Michaelangel007)
