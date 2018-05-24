@@ -186,7 +186,7 @@
     }
 
     async function setupScreenView() {
-      const images = [
+      const images = [ // path, title, DHGR
         ["images/airheart-560x192.png",         "Airheart",                 true ],
         ["images/battle-chess.png",             "Battle Chess",             true ],
         ["images/archon.png",                   "Archon",                   false],
@@ -199,6 +199,7 @@
         ["images/rescue-raiders-pic.png",       "Rescue Raiders (a)",       false],
         ["images/rescue-raiders-words.png",     "Rescue Raiders (b)",       false],
         ["images/ancient-legends.png",          "Ancient Legends",          false],
+        ["images/u5-shadowlords.png",           "Ultima 5",                 false],
       ];
 
       const image1 = await screenEmu.loadImage("images/airheart-560x192.png");
