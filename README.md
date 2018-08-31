@@ -12,4 +12,5 @@ github simply for backup.
 
 The original code was written by Marc S. Ressl. This is just a port: all the logic is due to them.
 
-- [https://github.com/Michaelangel007](Michaelangel007)
+People who have sent PRs to this repository include:
+- [Michaelangel007](https://github.com/Michaelangel007)
