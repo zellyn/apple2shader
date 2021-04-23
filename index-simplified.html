@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>WebGL port of OpenEmulator NTSC shader</title>
+  <style>
+  </style>
+<style>
+
+  .wrapper {
+    display: grid;
+    grid-gap: 10px;
+    grid-template-columns: auto 20em;
+  }
+
+  .controls {
+    order: 2;
+  }
+
+  .screen {
+    order: 1;
+  }
+
+</style>
+</head>
+<body>
+  <script src="screenEmu-simplified.js"></script>
+
+  <div class="wrapper">
+  <div class="controls">
+    <form>
+    <table>
+      <tr>
+        <td>Image</td>
+        <td>
+          <select id="input-image" class="input-image">
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td>&nbsp</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Decoder</td>
+        <td>
+          Composite Y'UV
+        </td>
+      </tr>
+      <tr>
+        <td>Contrast</td>
+        <td><input type="range" min="0" max="2" step="0.01" value="1" class="slider update" id="videoContrast"></td>
+      </tr>
+      <tr>
+        <td>Saturation</td>
+        <td><input type="range" min="0" max="2" step="0.01" value="1" class="slider update" id="videoSaturation"></td>
+      </tr>
+      <tr>
+        <td>Hue</td>
+        <td><input type="range" min="-0.5" max="0.5" step="0.01" value="0" class="slider update" id="videoHue"></td>
+      </tr>
+      <tr>
+        <td>Horizontal Center</td>
+        <td><input type="range" min="-0.1" max="0.1" step="0.01" value="0" class="slider update" id="videoHorizontalCenter"></td>
+      </tr>
+      <tr>
+        <td>Horizontal Size</td>
+        <td><input type="range" min="0.85" max="1.25" step="0.01" value="1.05" class="slider update" id="videoHorizontalSize"></td>
+      </tr>
+      <tr>
+        <td>Vertical Center</td>
+        <td><input type="range" min="-0.1" max="0.1" step="0.01" value="0" class="slider update" id="videoVerticalCenter"></td>
+      </tr>
+      <tr>
+        <td>Vertical Size</td>
+        <td><input type="range" min="0.85" max="1.25" step="0.01" value="1.05" class="slider update" id="videoVerticalSize"></td>
+      </tr>
+      <tr>
+        <td>Luma Bandwidth</td>
+        <td><input type="range" min="0" max="7159090" step="1" value="2000000" class="slider update" id="videoLumaBandwidth"></td>
+      </tr>
+      <tr>
+        <td>Chroma Bandwidth</td>
+        <td><input type="range" min="0" max="7159090" step="1" value="600000" class="slider update" id="videoChromaBandwidth"></td>
+      </tr>
+      <tr>
+        <td>&nbsp</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td></td>
+        <td><input type="reset" id="reset" value="Reset"></td>
+      </tr>
+    </table>
+    </form>
+  </div>
+  <div class="screen">
+    <canvas id="d" width="768" height="576"></canvas>
+  </div>
+  </div><!-- class="wrapper" -->
+  <div class="notes">
+    <p>
+      This is a WebGL port by Zellyn Hunter of Marc S. Ressl's NTSC
+      emulation from OpenEmulator. The source code is <a href="https://github.com/zellyn/apple2shader">here</a>.
+    </p>
+    <p>You can find out more about OpenEmulator at
+      the <a href="http://openemulatorproject.github.io/">OpenEmulator
+      project website</a>, or download
+      a <a href="https://archive.org/details/OpenEmulatorSnapshots">recent
+      build from the Internet Archive</a>, thanks to 4am.
+    </p>
+  </div>
+  <script>
+    function updateDisplayConfig(config) {
+      config.videoContrast = Number(document.getElementById('videoContrast').value);
+      config.videoSaturation = Number(document.getElementById('videoSaturation').value);
+      config.videoHue = Number(document.getElementById('videoHue').value);
+      config.videoCenter = new screenEmu.Point(
+        Number(document.getElementById('videoHorizontalCenter').value),
+        Number(document.getElementById('videoVerticalCenter').value)
+      );
+      config.videoSize = new screenEmu.Size(
+        Number(document.getElementById('videoHorizontalSize').value),
+        Number(document.getElementById('videoVerticalSize').value)
+      );
+      config.videoLumaBandwidth = Number(document.getElementById('videoLumaBandwidth').value);
+      config.videoChromaBandwidth = Number(document.getElementById('videoChromaBandwidth').value);
+    }
+
+    async function setupScreenView() {
+      const images = [ // path, title, DHGR
+        ["images/airheart-560x192.png",          "Airheart",                  true ],
+        ["images/battle-chess.png",              "Battle Chess",              true ],
+        ["images/archon.png",                    "Archon",                    false],
+        ["images/archon-ii.png",                 "Archon II",                 false],
+        ["images/lode-runner.png",               "Lode Runner",               false],
+        ["images/championship-lode-runner.png",  "Championship Lode Runner",  false],
+        ["images/marty-reader.png",              "Marty's Family Reader",     true ],
+        ["images/bards-tale.png",                "Bard's Tale",               false],
+        ["images/dazzledraw-flower.png",         "DazzleDraw flower",         true ],
+        ["images/rescue-raiders-pic.png",        "Rescue Raiders (a)",        false],
+        ["images/rescue-raiders-words.png",      "Rescue Raiders (b)",        false],
+        ["images/ancient-legends.png",           "Ancient Legends",           false],
+        ["images/u5-shadowlords.png",            "Ultima 5",                  false],
+	["images/wild-things-3-2-1-contact.png", "Wild Things 3-2-1 Contact", false],
+	["images/burger.png",                    "BURGER",                    false],
+      ];
+
+      const image1 = await screenEmu.loadImage("images/airheart-560x192.png");
+      const image2 = await screenEmu.loadImage("images/battle-chess.png");
+      const image3 = await screenEmu.loadImage("images/archon.png");
+      const image4 = await screenEmu.loadImage("images/archon-ii.png");
+      const image5 = await screenEmu.loadImage("images/lode-runner.png");
+      const image6 = await screenEmu.loadImage("images/marty-reader.png");
+
+      const imsel = document.getElementById('input-image');
+
+      for (let i = 0; i < images.length; i++) {
+        const image = await screenEmu.loadImage(images[i][0]);
+        images[i].push(image);
+        const option = document.createElement("option");
+        option.text = images[i][1];
+        option.value = i;
+        imsel.appendChild(option);
+      }
+
+      let canvas = document.getElementById("d");
+      let sv = new screenEmu.ScreenView(canvas);
+      await sv.initOpenGL();
+
+      let displayConfig = new screenEmu.DisplayConfiguration();
+      displayConfig.displayResolution = new screenEmu.Size(d.width, d.height);
+      sv.displayConfiguration = displayConfig;
+
+      update = () => {
+        updateDisplayConfig(displayConfig);
+        sv.displayConfiguration = displayConfig;
+        sv.vsync();
+      }
+
+      for (const elem of document.getElementsByClassName('update')) {
+        elem.onchange = update;
+      }
+
+      updateImage = () => {
+        const index = Number(imsel.value);
+        const [imageCanvas, imageData] = screenEmu.screenData(images[index][3],
+                                                              images[index][2]);
+        let imageInfo = new screenEmu.ImageInfo(imageData);
+        sv.image = imageInfo;
+        sv.vsync();
+      }
+
+      updateImage();
+      imsel.onchange = updateImage;
+
+      document.getElementById('reset').onclick = () => {
+        setTimeout(() => {
+          update();
+          updateImage();
+        }, 0);
+      }
+
+      // sv.freeOpenGL();
+    }
+
+    setupScreenView();
+
+  </script>
+</body>
+</html>
